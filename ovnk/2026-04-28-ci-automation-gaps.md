@@ -197,6 +197,27 @@ updates:
 
 ---
 
+## Jamo Luhrsen — Context for Collaboration
+
+Jamo (jluhrsen) is the primary downstream merge shepherd and OTE test architect.
+Understanding his work helps us contribute in ways that align with the team.
+
+### What he's actually doing (verified from git history + GitHub)
+
+- **Downstream merges**: ~biweekly, manually resolving conflicts. Flow is healthy (PR #3159 merged Apr 29, #3168 in CI).
+- **OTE test management**: Classifying upstream tests as informing/blocking. Informing tests deliberately disabled by jcaamano ([PR #3118](https://github.com/openshift/ovn-kubernetes/pull/3118)) — internal decision, not a gap for us.
+- **CI flake fighting**: REAL and ongoing. On Apr 29 alone, triggered 11 jobs on one PR. His solution: personal `jluhrsen/pr-ci-dashboard` tool (active as of Apr 16).
+- **Branch sync automation**: Building jobs in openshift/release for OCP 5.0 transition. His PRs need dptp team approval — not something external contributors can shortcut.
+
+### Realistic collaboration approach
+
+The original 5 items were overstated — none are realistic entry points as described. What IS realistic:
+- [ ] **Build a fresh ci:pr-retest ai-helpers command** — Not rebasing PR #177 (stale, design criticism, Jamo moved on). Instead, build new command that uses AI reasoning (addressing reviewer feedback) on top of existing ci plugin's 25 commands. Would complement his pr-ci-dashboard.
+- [ ] **Contribute upstream ovnk fixes** — The verified first PRs (Alpine, permissions, paths-ignore) don't need Jamo's involvement but demonstrate competence to the broader team he works with.
+- [ ] **Talk to Jamo directly** — He's a former Submariner coworker. Asking "what would actually help?" is more effective than guessing from git history.
+
+---
+
 ## Dropped After Verification
 
 - ~~Upload-artifact v3→v7~~ — FALSE POSITIVE. `upload-pages-artifact@v3` is a different action.
@@ -214,6 +235,14 @@ updates:
 - ~~Commit format/size enforcement~~ — Too cultural/invasive.
 - ~~gofumpt~~ — Would reformat many files.
 - ~~Shared lint framework~~ — Different project structure.
+- ~~Help resolve merge PR #3142~~ — Bot-generated branch sync (master→release-4.22), not a stuck downstream merge. On hold by design, needs release context.
+- ~~Automate OTE test annotation diffs~~ — ALREADY AUTOMATED. `downstream-sync-commands.sh` runs `update-tests-annotation.sh` automatically. Only failure path is manual.
+- ~~Help debug CNO PR #2968~~ — Only 6 days old, needs maintainer review (mattedallo/tssurya). External help limited to lint failure diagnosis. Not a strong collaboration opportunity.
+- ~~Branch sync PR #76204~~ — Practically dead (lifecycle/rotten). Design disagreement on removing `-X theirs`. No consensus.
+- ~~Pick up ai-helpers PR #177 as-is~~ — Stale 5 months, design criticized by reviewers (bentito: "not sure how much AI this is"), Jamo moved to personal `pr-ci-dashboard`. Resurrecting it would be more work than starting fresh.
+- ~~OTE informing test presubmit job~~ — Deliberately disabled by jcaamano (PR #3118, Apr 7). Internal decision, not our call to re-enable.
+- ~~Help land branch sync PR #77875~~ — Rehearsal test failing, needs dptp approval. We have no authority in openshift/release.
+- ~~CI config templating~~ — Solved problem. config-brancher + prowgen already handle per-branch configs by design. Duplication is intentional.
 
 ---
 
