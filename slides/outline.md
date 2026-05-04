@@ -72,13 +72,13 @@ agent automation. Examples drawn from release management automation
   be overly complex to automate traditionally
 - The deterministic part collects data and attempts fixes;
   the agent part reviews, judges, and handles ambiguity
-- [Example: scripts/cve/fix-all.sh tries every CVE fix
+- [Example: [scripts/cve/fix-all.sh](https://github.com/submariner-io/shipyard/pull/2383) tries every CVE fix
   deterministically, exits with "needs review" status code for
   ambiguous cases, then review.sh + review-prompt.md invokes an
   agent with pre-fetched evidence — agent judges, never searches]
-- [Example: scripts/bundle-image-update.sh (536 lines) handles SHA
-  extraction/validation deterministically — agent is only invoked
-  for release notes review]
+- [Example: [bundle-image-update.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/bundle-image-update.sh)
+  (536 lines) handles SHA extraction/validation deterministically
+  — agent is only invoked for release notes review]
 - [Note: Salesforce calls this "guided determinism." Deepset's 80/20
   rule: 80% of enterprise processes need deterministic execution,
   20% benefit from autonomous reasoning.]
@@ -88,10 +88,10 @@ agent automation. Examples drawn from release management automation
 - In your Claude interactive sessions, more context is typically better
 - In Claude instances that are meant to solve a narrower problem
   repeatedly, unnecessary context leads to unwanted inconsistencies
-- [Example: scripts/release-status.sh (1,474 lines) crafts focused
-  context for both humans and agents. The agent doesn't see the
-  whole system — it sees exactly what it needs to evaluate the
-  current state.]
+- [Example: [release-status.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-status.sh)
+  (1,474 lines) crafts focused context for both humans and agents.
+  The agent doesn't see the whole system — it sees exactly what it
+  needs to evaluate the current state.]
 - [Note: Anthropic calls this "context engineering" — "finding the
   smallest possible set of high-signal tokens." Non-interactive agents
   are single-shot (claude -p --print), so it's not about context
@@ -117,8 +117,8 @@ Each pattern has a concept slide followed by an example slide.
 - Write the process in English as a markdown document
 - Claude reads it and follows it like a runbook
 - Low investment, immediate value
-- submariner/.agents/workflows/cve-fix.md
-- submariner-release-management/.agents/workflows/scan-cves.md
+- [submariner/.agents/workflows/cve-fix.md](https://github.com/submariner-io/submariner/blob/devel/.agents/workflows/cve-fix.md)
+- [submariner-release-management/.agents/workflows/scan-cves.md](https://github.com/stolostron/submariner-release-management/blob/main/.agents/workflows/scan-cves.md)
 
 ### Slide 10: Phase 1 — Mixed md/sh
 
@@ -126,17 +126,20 @@ Each pattern has a concept slide followed by an example slide.
 - Markdown provides structure and decision logic;
   bash provides precision for deterministic steps
 - Works to get started but becomes hard to maintain at ~1,000 lines
-- skills/cve-fix/SKILL.md
-- [Note: konflux-component-setup was 1,484 lines of inline bash —
-  worked but was the forcing function for evolving further]
+- [skills/cve-fix/SKILL.md](https://github.com/submariner-io/shipyard/pull/2383)
+- [Note: links to WIP PR until branch is merged. konflux-component-setup
+  was 1,484 lines of inline bash — worked but was the forcing function
+  for evolving further]
 
 ### Slide 11: Phase 2 — Mostly sh
 
 - The scripts do the heavy lifting
 - Skill wraps one or more scripts with markdown framing
 - Scripts start to become independently useful
-- /add-release-notes -> scripts/release-notes/auto-apply.sh
-- /cve-fix -> WIP PR: shipyard/pull/2383
+- /add-release-notes ->
+  [scripts/release-notes/auto-apply.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/auto-apply.sh)
+- /cve-fix ->
+  WIP PR: [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383)
 
 ### Slide 12: Phase 3 — All sh, optional agent
 
@@ -147,12 +150,12 @@ Each pattern has a concept slide followed by an example slide.
   - Skill wrapper (Claude — thin wrapper that exec's the script)
 - Agent adds judgment only where deterministic logic can't
 - (many more end in this state)
-- scripts/create-component-release.sh +
-  skills/create-component-release/SKILL.md +
-  Makefile
-- scripts/rpm-lockfile-update.sh +
-  skills/rpm-lockfile-update/SKILL.md +
-  Makefile
+- [scripts/create-component-release.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/create-component-release.sh)
+  \+ [skills/create-component-release/SKILL.md](https://github.com/stolostron/submariner-release-management/blob/main/skills/create-component-release/SKILL.md)
+  \+ [Makefile#L93](https://github.com/stolostron/submariner-release-management/blob/main/Makefile#L93)
+- [scripts/rpm-lockfile-update.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/rpm-lockfile-update.sh)
+  \+ [skills/rpm-lockfile-update/SKILL.md](https://github.com/stolostron/submariner-release-management/blob/main/skills/rpm-lockfile-update/SKILL.md)
+  \+ [Makefile#L101](https://github.com/stolostron/submariner-release-management/blob/main/Makefile#L101)
 - [Note: three entry points are thin aliases — make and skill both
   just call the script. The value is meeting users where they are.
   Four skills refactored from Phase 1 to Phase 3 in a single day.
@@ -175,8 +178,8 @@ Each pattern has a concept slide followed by an example slide.
 - A top-level doc (like CLAUDE.md) can reference these as steps in
   a workflow — the agent follows the references, the human reads
   the same docs as runbooks
-- submariner-release-management/.agents/workflows/
-- submariner-operator/.agents/workflows/
+- [submariner-release-management/.agents/workflows/](https://github.com/stolostron/submariner-release-management/tree/main/.agents/workflows)
+- [submariner-operator/.agents/workflows/](https://github.com/submariner-io/submariner-operator/tree/devel/.agents/workflows)
 - [Note: 22 workflow docs in the orchestration repo, plus workflow
   docs in 5 upstream repos — same format everywhere. Same artifacts,
   two audiences, zero duplication. Example: /context skill.]
@@ -189,9 +192,13 @@ Each pattern has a concept slide followed by an example slide.
 ### Slide 16: Example: Small World, Many Agents
 
 - /add-release-notes:
-  collect.sh -> prepare.sh -> review.sh + review-prompt.md
+  [collect.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/collect.sh)
+  -> [prepare.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/prepare.sh)
+  -> [review.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/review.sh)
+  \+ [review-prompt.md](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/review-prompt.md)
 - /cve-fix:
   detect.sh -> fix-all.sh -> review.sh + review-prompt.md
+  (WIP: [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383))
 - Each agent gets pre-fetched evidence — it evaluates, never searches
 - Per-unit commits for reviewability and revertability
 
@@ -205,10 +212,11 @@ Each pattern has a concept slide followed by an example slide.
 
 - Written design docs before implementation pay off enormously
   when agent execution depends on getting the structure right
-- seps/SEP-0031-modernize-enhancements.md
-  -> enhancements/pull/267
+- [seps/SEP-0031-modernize-enhancements.md](https://github.com/submariner-io/enhancements/blob/devel/seps/SEP-0031-modernize-enhancements.md)
+  -> [enhancements/pull/267](https://github.com/submariner-io/enhancements/pull/267)
 - seps/SEP-0032-cve-fix-refactoring.md
-  -> shipyard/pull/2383
+  -> [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383)
+  (SEP-0032 on WIP branch, not yet on devel)
 - Enhancement proposals as agent-consumable specs — like plan mode
   extracted to a shared repo for review
 - configure-downstream.sh: 49 files across 3 commits — the planning
