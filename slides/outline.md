@@ -29,6 +29,8 @@ agent automation. Examples drawn from release management automation
   non-interactively
 - Built ~15 skills for release management — building, testing,
   securing, and shipping software releases
+- Goal: make the process handoff-ready so the team that built it
+  can move on
 - Patterns emerged that apply to any domain
 - All early lessons, would love to hear feedback from others
 
@@ -224,6 +226,9 @@ Each pattern has a concept slide followed by an example slide.
 - No loop tracking, no history — re-check structured state each time
   and pick the next incomplete step
 - "The quality bar shifts entirely to the state checker's thoroughness"
+- Key motivator: make release process handoff-ready — a sustainment
+  team can run the automation so core contributors can move on to
+  future projects
 - Open question: how to host skill automation that needs many secrets?
   (cluster credentials, registry auth, entitlements, GitHub/Jira
   tokens, signing keys) — today runs on a developer laptop, but
