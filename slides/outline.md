@@ -173,7 +173,7 @@ Each pattern has a concept slide followed by an example slide.
 ### Slide 15: Design Pattern: Small World, Many Agents
 
 - Craft data to create focused context for agents
-- Invoke many focused agents, each on a discrete problem
+- Invoke many agents in parallel, each focused on a discrete problem
 
 ### Slide 16: Example: Small World, Many Agents
 
