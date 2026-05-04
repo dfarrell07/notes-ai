@@ -126,10 +126,9 @@ Each pattern has a concept slide followed by an example slide.
 - Markdown provides structure and decision logic;
   bash provides precision for deterministic steps
 - Works to get started but becomes hard to maintain at ~1,000 lines
-- [skills/cve-fix/SKILL.md](https://github.com/submariner-io/shipyard/pull/2383)
-- [Note: links to WIP PR until branch is merged. konflux-component-setup
-  was 1,484 lines of inline bash — worked but was the forcing function
-  for evolving further]
+- [skills/cve-fix/SKILL.md](https://github.com/submariner-io/shipyard/pull/2383/files)
+- [Note: konflux-component-setup was 1,484 lines of inline bash —
+  worked but was the forcing function for evolving further]
 
 ### Slide 11: Phase 2 — Mostly sh
 
@@ -214,9 +213,8 @@ Each pattern has a concept slide followed by an example slide.
   when agent execution depends on getting the structure right
 - [seps/SEP-0031-modernize-enhancements.md](https://github.com/submariner-io/enhancements/blob/devel/seps/SEP-0031-modernize-enhancements.md)
   -> [enhancements/pull/267](https://github.com/submariner-io/enhancements/pull/267)
-- seps/SEP-0032-cve-fix-refactoring.md
+- [seps/SEP-0032-cve-fix-refactoring.md](https://github.com/submariner-io/enhancements/pull/268)
   -> [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383)
-  (SEP-0032 on WIP branch, not yet on devel)
 - Enhancement proposals as agent-consumable specs — like plan mode
   extracted to a shared repo for review
 - configure-downstream.sh: 49 files across 3 commits — the planning
