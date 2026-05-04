@@ -27,8 +27,9 @@ agent automation. Examples drawn from release management automation
 - "Skill" = Claude skill
 - Use Claude interactively to create automation that runs Claude
   non-interactively
-- Built ~15 skills for release management automation — patterns emerged
-- These patterns apply to any domain
+- Built ~15 skills for release management — building, testing,
+  securing, and shipping software releases
+- Patterns emerged that apply to any domain
 - All early lessons, would love to hear feedback from others
 
 ### Slide 3: Demo Start
@@ -76,6 +77,11 @@ agent automation. Examples drawn from release management automation
 ---
 
 ## Part 3: Design Patterns
+
+Each pattern has two types of slides:
+
+- **"Design Pattern — [Name]"** introduces the idea
+- **"[Name]"** (same title, no prefix) shows concrete examples
 
 ### Slide 7: Design Pattern — Pseudocode as Prototype
 
@@ -130,7 +136,7 @@ agent automation. Examples drawn from release management automation
 - Write once, serve both audiences
 - Massively increases productivity of docs
 
-### Slide 13: Pulse-Agnostic Docs — In Practice
+### Slide 13: Pulse-Agnostic Docs
 
 - Use a consistent document structure that works for both:
   - "When" = trigger condition for a human, precondition for an agent
@@ -148,7 +154,7 @@ agent automation. Examples drawn from release management automation
 - Craft data to create focused context for agents
 - Invoke many agents in parallel, each focused on a discrete problem
 
-### Slide 15: Small World, Many Agents — In Practice
+### Slide 15: Small World, Many Agents
 
 - Pattern: deterministic scripts collect and prepare data, then
   focused agents review with purpose-built prompts
@@ -167,7 +173,7 @@ agent automation. Examples drawn from release management automation
 - (all the well-known relevant expressions)
 - More human effort collaborating on plans before agent execution
 
-### Slide 17: Proper Plans — In Practice
+### Slide 17: Proper Plans
 
 - Written design docs before implementation pay off enormously
   when agent execution depends on getting the structure right
