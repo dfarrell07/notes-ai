@@ -12,8 +12,7 @@ Skill Design Patterns
 What's a Skill & Why It Matters
 
 - "Skill" -> "Claude skill"
-- Claude interactive to create automation that runs Claude
-  non-interactively
+- Claude interactive -> automation that runs Claude non-interactively
 - ~15 skills for release management, goal: handoff-ready
 - All early lessons, would love to hear feedback from others
 
@@ -35,36 +34,32 @@ Demo Start
 
 Core Lesson: New Domains of Automation
 
-- Custom, complex automation that would not have been practical
-  before is now possible to produce quickly and maintain
-- Still good to build on shared, quality tools
+- Complex automation that wasn't practical before — now feasible
+- Still build on shared, quality tools
 - Processes should be Written-Down-as-Automation
-- Shared skills and custom skills are both valuable
+- Shared skills and custom skills both valuable
 
 ---
 
 Core Lesson: Design Around Indeterminism
 
 - Extract as much work to deterministic logic as possible
-- Treat agent call like a function call for "fuzzy" logic that
-  would be overly complex to automate with traditional automation
+- Agent call = function call for "fuzzy" logic
 
 ---
 
 Core Lesson: Design the Context (more not always better)
 
-- In your Claude interactive sessions, more context is typically
-  better
-- In Claude instances that are meant to solve a narrower problem
-  repeatedly, unnecessary context leads to unwanted inconsistencies
+- Interactive: more context is typically better
+- Non-interactive: unnecessary context causes inconsistencies
 
 ---
 
 Design Pattern: Pseudocode as Prototype
 
-- Skills can start as English descriptions of processes in Markdown,
-  but they can run like code
+- Skills start as English in Markdown, but run like code
 - Recommended way to get started
+- Four phases — most skills converge at Phase 3
 
 ---
 
@@ -92,21 +87,22 @@ Pseudocode as Prototype Phase 2: Mostly sh
 
 Pseudocode as Prototype Phase 3: All sh, optional agent
 
-- Wrapped by both make/agent
+- Script runs standalone — three entry points:
+  - Script (CI) | Make (humans) | Skill (Claude)
 - [scripts/create-component-release.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/create-component-release.sh)
-  - [skills/create-component-release/SKILL.md](https://github.com/stolostron/submariner-release-management/blob/main/skills/create-component-release/SKILL.md)
-  - [Makefile#L93](https://github.com/stolostron/submariner-release-management/blob/main/Makefile#L93)
+  - [SKILL.md](https://github.com/stolostron/submariner-release-management/blob/main/skills/create-component-release/SKILL.md)
+  - [Makefile](https://github.com/stolostron/submariner-release-management/blob/main/Makefile#L93)
 - [scripts/rpm-lockfile-update.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/rpm-lockfile-update.sh)
-  - [skills/rpm-lockfile-update/SKILL.md](https://github.com/stolostron/submariner-release-management/blob/main/skills/rpm-lockfile-update/SKILL.md)
-  - [Makefile#L101](https://github.com/stolostron/submariner-release-management/blob/main/Makefile#L101)
+  - [SKILL.md](https://github.com/stolostron/submariner-release-management/blob/main/skills/rpm-lockfile-update/SKILL.md)
+  - [Makefile](https://github.com/stolostron/submariner-release-management/blob/main/Makefile#L101)
 - (many more end in this state)
 
 ---
 
 Design Pattern: Pulse-Agnostic Docs
 
-- Create context for agents that's also docs for humans
-- Massively increases productivity of docs
+- Context for agents that's also docs for humans
+- Write once, serve both audiences
 - Example: /context
   - (next slide)
 
@@ -114,6 +110,9 @@ Design Pattern: Pulse-Agnostic Docs
 
 Example: Pulse-Agnostic Docs
 
+- When | Process | Done When
+- Same doc: trigger/precondition, steps/instructions,
+  checklist/verification
 - [submariner-release-management/.agents/workflows](https://github.com/stolostron/submariner-release-management/tree/main/.agents/workflows)
 - [submariner-operator/.agents/workflows](https://github.com/submariner-io/submariner-operator/tree/devel/.agents/workflows)
 
@@ -121,23 +120,22 @@ Example: Pulse-Agnostic Docs
 
 Design Pattern: Small World, Many Agents
 
-- Craft data to create context for agents
-- Invoke many agents in parallel, each focused on a discrete problem
+- Pre-fetch evidence deterministically, create focused context
+- Many agents in parallel, each on a discrete problem
 
 ---
 
 Example: Small World, Many Agents
 
 - /add-release-notes
-  - [scripts/release-notes/collect.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/collect.sh)
-  - [scripts/release-notes/prepare.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/prepare.sh)
-  - [scripts/release-notes/review.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/review.sh)
-  - [scripts/release-notes/review-prompt.md](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/review-prompt.md)
+  - [collect.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/collect.sh)
+    -> [prepare.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/prepare.sh)
+    -> [review.sh](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/review.sh)
+    \+ [review-prompt.md](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/review-prompt.md)
 - /cve-fix
-  - [scripts/cve/detect.sh](https://github.com/submariner-io/shipyard/pull/2383)
-  - [scripts/cve/fix-all.sh](https://github.com/submariner-io/shipyard/pull/2383)
-  - [scripts/cve/review.sh](https://github.com/submariner-io/shipyard/pull/2383)
-  - [scripts/cve/review-prompt.md](https://github.com/submariner-io/shipyard/pull/2383)
+  - detect -> fix-all -> review + prompt
+    ([PR](https://github.com/submariner-io/shipyard/pull/2383))
+- Agent evaluates, never searches — per-unit revertable commits
 
 ---
 
@@ -145,16 +143,17 @@ Design Pattern: Proper Plans
 
 - Plans for agents deserve more rigor, not less
 - Ambiguity a human navigates = failure mode for agents
-- More human effort collaborating on plans before agent execution
 
 ---
 
 Example: Proper Plans
 
-- [seps/SEP-0031-modernize-enhancements.md](https://github.com/submariner-io/enhancements/blob/devel/seps/SEP-0031-modernize-enhancements.md)
-  - Created [enhancements/pull/267](https://github.com/submariner-io/enhancements/pull/267)
-- [seps/SEP-0032-cve-fix-refactoring.md](https://github.com/submariner-io/enhancements/pull/268)
-  - Created [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383)
+- [SEP-0031](https://github.com/submariner-io/enhancements/blob/devel/seps/SEP-0031-modernize-enhancements.md)
+  -> [enhancements/pull/267](https://github.com/submariner-io/enhancements/pull/267)
+- [SEP-0032](https://github.com/submariner-io/enhancements/pull/268)
+  -> [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383)
+- Enhancement proposals as agent-consumable specs
+- configure-downstream.sh: 49 files, 3 commits
 
 ---
 
