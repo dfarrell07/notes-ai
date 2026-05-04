@@ -241,7 +241,7 @@ Each pattern has a concept slide followed by an example slide.
 - Open question: what should the top-level UI be?
   Slack bot? MCP endpoint? CLI? Something else?
 - [Note: stateless re-evaluation maps to IaC idempotent convergence
-  (Puppet/Chef). For hosting, industry converging on ephemeral
+  (Ansible/Terraform). For hosting, industry converging on ephemeral
   containers + credential vaults. For UI, Slack + MCP is the
   front-runner. All good for audience discussion.]
 
