@@ -172,7 +172,7 @@ Each pattern has a concept slide followed by an example slide.
 
 ### Slide 15: Design Pattern: Small World, Many Agents
 
-- Craft data to create focused context for agents
+- Pre-fetch evidence deterministically to create focused context
 - Invoke many agents in parallel, each focused on a discrete problem
 
 ### Slide 16: Example: Small World, Many Agents
@@ -190,8 +190,8 @@ Each pattern has a concept slide followed by an example slide.
 
 ### Slide 17: Design Pattern: Proper Plans
 
-- Effort into quality plans is massively productive
-- (all the well-known relevant expressions)
+- Plans that agents execute deserve more rigor, not less
+- Ambiguity a human would navigate becomes a failure mode for agents
 - More human effort collaborating on plans before agent execution
 
 ### Slide 18: Example: Proper Plans
@@ -203,8 +203,9 @@ Each pattern has a concept slide followed by an example slide.
   the design was fully worked out first
 - [Example: a setup script generates 49 files across 3 commits —
   the planning phase was longer than the implementation]
-- [Example: design docs (SEPs) that became PRs — the plan was
-  the implementation spec]
+- [Example: enhancement proposals written as agent-consumable specs
+  (like plan mode extracted to a shared repo for review) — the plan
+  is the spec the agent follows to implement]
 
 ---
 
@@ -231,25 +232,18 @@ Each pattern has a concept slide followed by an example slide.
 
 ### Slide 21: What's Next
 
-- Conductor pattern: a meta-skill that orchestrates other skills
-- Key insight: stateless re-evaluation, not a state machine
-- No loop tracking, no history — re-check structured state each time
-  and pick the next incomplete step
+- Conductor pattern: a meta-skill that orchestrates all others via
+  stateless re-evaluation — re-check structured state each time,
+  pick the next incomplete step, no loop tracking needed
 - "The quality bar shifts entirely to the state checker's thoroughness"
-- Key motivator: make release process handoff-ready — a sustainment
-  team can run the automation so core contributors can move on to
-  future projects
 - Open question: how to host skill automation that needs many secrets?
-  (cluster credentials, registry auth, entitlements, GitHub/Jira
-  tokens, signing keys) — today runs on a developer laptop, but
-  that doesn't scale
+  Today runs on a developer laptop — doesn't scale to a team
 - Open question: what should the top-level UI be?
   Slack bot? MCP endpoint? CLI? Something else?
 - [Note: stateless re-evaluation maps to IaC idempotent convergence
-  (Puppet/Chef). Anthropic's guidance: "find the simplest solution
-  possible." For hosting, industry converging on ephemeral containers
-  - credential vaults. For UI, Slack + MCP is the front-runner.
-  All good for audience discussion.]
+  (Puppet/Chef). For hosting, industry converging on ephemeral
+  containers + credential vaults. For UI, Slack + MCP is the
+  front-runner. All good for audience discussion.]
 
 ---
 
