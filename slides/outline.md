@@ -80,7 +80,7 @@ agent automation. Examples drawn from release management automation
 
 Each pattern has a concept slide followed by an example slide.
 
-### Slide 7: Design Pattern — Pseudocode as Prototype
+### Slide 7: Design Pattern: Pseudocode as Prototype
 
 - Skills can start as English descriptions of processes in Markdown,
   but they can run like code
@@ -127,13 +127,13 @@ Each pattern has a concept slide followed by an example slide.
   pattern was clear. Inline skills couldn't be tested independently,
   used from CI, or debugged outside Claude.]
 
-### Slide 12: Design Pattern — Pulse-Agnostic Docs
+### Slide 12: Design Pattern: Pulse-Agnostic Docs
 
 - Create context for agents that's also docs for humans
 - Write once, serve both audiences
 - Massively increases productivity of docs
 
-### Slide 13: Pulse-Agnostic Docs — Example
+### Slide 13: Example: Pulse-Agnostic Docs
 
 - Use a consistent document structure that works for both:
   - "When" = trigger condition for a human, precondition for an agent
@@ -146,12 +146,12 @@ Each pattern has a concept slide followed by an example slide.
 - [Example: 22 workflow docs serve as both agent context and team
   runbooks. Same artifacts, two audiences, zero duplication.]
 
-### Slide 14: Design Pattern — Small World, Many Agents
+### Slide 14: Design Pattern: Small World, Many Agents
 
 - Craft data to create focused context for agents
 - Invoke many agents in parallel, each focused on a discrete problem
 
-### Slide 15: Small World, Many Agents — Example
+### Slide 15: Example: Small World, Many Agents
 
 - Pattern: deterministic scripts collect and prepare data, then
   focused agents review with purpose-built prompts
@@ -164,13 +164,13 @@ Each pattern has a concept slide followed by an example slide.
   fix summary, and package location data. Agent reviews the
   deterministic fixes and handles remaining ambiguous cases.]
 
-### Slide 16: Design Pattern — Proper Plans
+### Slide 16: Design Pattern: Proper Plans
 
 - Effort into quality plans is massively productive
 - (all the well-known relevant expressions)
 - More human effort collaborating on plans before agent execution
 
-### Slide 17: Proper Plans — Example
+### Slide 17: Example: Proper Plans
 
 - Written design docs before implementation pay off enormously
   when agent execution depends on getting the structure right
