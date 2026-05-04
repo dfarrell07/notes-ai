@@ -39,6 +39,7 @@ agent automation. Examples drawn from release management automation
 - Scripts: 28 scripts, 9,772 lines
 - Docs: 22 workflow runbooks
 - Configs: 88 release YAMLs
+- Spanning 7+ repos with shared agent infrastructure
 - Covering a 20-step release lifecycle that was previously
   entirely manual
 
@@ -153,8 +154,9 @@ Each pattern has a concept slide followed by an example slide.
 - A top-level doc (like CLAUDE.md) can reference these as steps in
   a workflow — the agent follows the references, the human reads
   the same docs as runbooks
-- [Example: 22 workflow docs serve as both agent context and team
-  runbooks. Same artifacts, two audiences, zero duplication.]
+- [Example: 22 workflow docs in the orchestration repo, plus workflow
+  docs in 5 upstream repos — same format everywhere. Same artifacts,
+  two audiences, zero duplication.]
 
 ### Slide 15: Design Pattern: Small World, Many Agents
 
