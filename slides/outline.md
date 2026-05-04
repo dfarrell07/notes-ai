@@ -77,6 +77,9 @@ agent automation. Examples drawn from release management automation
   evaluates with pre-fetched evidence — agent judges, never searches]
 - [Example: a 536-line script handles SHA extraction/validation
   deterministically — agent is only invoked for release notes review]
+- [Note: Salesforce calls this "guided determinism." Deepset's 80/20
+  rule: 80% of enterprise processes need deterministic execution,
+  20% benefit from autonomous reasoning.]
 
 ### Slide 7: Core Lesson: Design the Context
 
@@ -86,6 +89,9 @@ agent automation. Examples drawn from release management automation
 - [Example: a 1,474-line status dashboard crafts focused context for
   both humans and agents. The agent doesn't see the whole system —
   it sees exactly what it needs to evaluate the current state.]
+- [Note: Anthropic calls this "context engineering" — "finding the
+  smallest possible set of high-signal tokens." Chroma's research
+  shows irrelevant context actively misleads models ("context rot").]
 
 ---
 
@@ -135,10 +141,11 @@ Each pattern has a concept slide followed by an example slide.
   - Skill wrapper (Claude — thin wrapper that exec's the script)
 - Agent adds judgment only where deterministic logic can't
 - Most skills naturally converge here
-- [Note: this pattern emerged from real pain. Four skills were
-  refactored from Phase 1 to Phase 3 in a single day once the
-  pattern was clear. Inline skills couldn't be tested independently,
-  used from CI, or debugged outside Claude.]
+- [Note: this is Hexagonal Architecture (Ports and Adapters) applied
+  to skills — same logic, multiple driving adapters. Emerged from
+  real pain: four skills refactored from Phase 1 to Phase 3 in a
+  single day. Inline skills couldn't be tested, used from CI, or
+  debugged outside Claude.]
 
 ### Slide 13: Design Pattern: Pulse-Agnostic Docs
 
@@ -235,8 +242,11 @@ Each pattern has a concept slide followed by an example slide.
   that doesn't scale
 - Open question: what should the top-level UI be?
   Slack bot? MCP endpoint? CLI? Something else?
-- [Note: both open questions are unsolved and good for audience
-  discussion.]
+- [Note: stateless re-evaluation maps to IaC idempotent convergence
+  (Puppet/Chef). Anthropic's guidance: "find the simplest solution
+  possible." For hosting, industry converging on ephemeral containers
+  - credential vaults. For UI, Slack + MCP is the front-runner.
+  All good for audience discussion.]
 
 ---
 
