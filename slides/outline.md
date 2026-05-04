@@ -72,11 +72,13 @@ agent automation. Examples drawn from release management automation
   be overly complex to automate traditionally
 - The deterministic part collects data and attempts fixes;
   the agent part reviews, judges, and handles ambiguity
-- [Example: a script tries every CVE fix deterministically, exits
-  with "needs review" status code for ambiguous cases, then an agent
-  evaluates with pre-fetched evidence — agent judges, never searches]
-- [Example: a 536-line script handles SHA extraction/validation
-  deterministically — agent is only invoked for release notes review]
+- [Example: scripts/cve/fix-all.sh tries every CVE fix
+  deterministically, exits with "needs review" status code for
+  ambiguous cases, then review.sh + review-prompt.md invokes an
+  agent with pre-fetched evidence — agent judges, never searches]
+- [Example: scripts/bundle-image-update.sh (536 lines) handles SHA
+  extraction/validation deterministically — agent is only invoked
+  for release notes review]
 - [Note: Salesforce calls this "guided determinism." Deepset's 80/20
   rule: 80% of enterprise processes need deterministic execution,
   20% benefit from autonomous reasoning.]
@@ -86,9 +88,10 @@ agent automation. Examples drawn from release management automation
 - In your Claude interactive sessions, more context is typically better
 - In Claude instances that are meant to solve a narrower problem
   repeatedly, unnecessary context leads to unwanted inconsistencies
-- [Example: a 1,474-line status dashboard crafts focused context for
-  both humans and agents. The agent doesn't see the whole system —
-  it sees exactly what it needs to evaluate the current state.]
+- [Example: scripts/release-status.sh (1,474 lines) crafts focused
+  context for both humans and agents. The agent doesn't see the
+  whole system — it sees exactly what it needs to evaluate the
+  current state.]
 - [Note: Anthropic calls this "context engineering" — "finding the
   smallest possible set of high-signal tokens." Non-interactive agents
   are single-shot (claude -p --print), so it's not about context
@@ -114,8 +117,8 @@ Each pattern has a concept slide followed by an example slide.
 - Write the process in English as a markdown document
 - Claude reads it and follows it like a runbook
 - Low investment, immediate value
-- [Example: a workflow doc describing CVE scanning steps, a runbook
-  for configuring downstream builds]
+- submariner/.agents/workflows/cve-fix.md
+- submariner-release-management/.agents/workflows/scan-cves.md
 
 ### Slide 10: Phase 1 — Mixed md/sh
 
@@ -123,16 +126,17 @@ Each pattern has a concept slide followed by an example slide.
 - Markdown provides structure and decision logic;
   bash provides precision for deterministic steps
 - Works to get started but becomes hard to maintain at ~1,000 lines
-- [Example: a skill definition with 1,484 lines of inline bash —
-  this worked but was the forcing function for evolving further]
+- skills/cve-fix/SKILL.md
+- [Note: konflux-component-setup was 1,484 lines of inline bash —
+  worked but was the forcing function for evolving further]
 
 ### Slide 11: Phase 2 — Mostly sh
 
 - The scripts do the heavy lifting
 - Skill wraps one or more scripts with markdown framing
 - Scripts start to become independently useful
-- [Example: release notes script called by skill, CVE fix scripts
-  called by skill wrapper]
+- /add-release-notes -> scripts/release-notes/auto-apply.sh
+- /cve-fix -> WIP PR: shipyard/pull/2383
 
 ### Slide 12: Phase 3 — All sh, optional agent
 
@@ -142,13 +146,18 @@ Each pattern has a concept slide followed by an example slide.
   - Make / task runner (humans at the command line)
   - Skill wrapper (Claude — thin wrapper that exec's the script)
 - Agent adds judgment only where deterministic logic can't
-- Most skills naturally converge here
+- (many more end in this state)
+- scripts/create-component-release.sh +
+  skills/create-component-release/SKILL.md +
+  Makefile
+- scripts/rpm-lockfile-update.sh +
+  skills/rpm-lockfile-update/SKILL.md +
+  Makefile
 - [Note: three entry points are thin aliases — make and skill both
-  just call the script. The value is meeting users where they are:
-  CI calls the script, humans type make, Claude uses the skill.
-  Emerged from real pain: four skills refactored from Phase 1 to
-  Phase 3 in a single day. Inline skills couldn't be tested, used
-  from CI, or debugged outside Claude.]
+  just call the script. The value is meeting users where they are.
+  Four skills refactored from Phase 1 to Phase 3 in a single day.
+  Inline skills couldn't be tested, used from CI, or debugged
+  outside Claude.]
 
 ### Slide 13: Design Pattern: Pulse-Agnostic Docs
 
@@ -166,9 +175,11 @@ Each pattern has a concept slide followed by an example slide.
 - A top-level doc (like CLAUDE.md) can reference these as steps in
   a workflow — the agent follows the references, the human reads
   the same docs as runbooks
-- [Example: 22 workflow docs in the orchestration repo, plus workflow
+- submariner-release-management/.agents/workflows/
+- submariner-operator/.agents/workflows/
+- [Note: 22 workflow docs in the orchestration repo, plus workflow
   docs in 5 upstream repos — same format everywhere. Same artifacts,
-  two audiences, zero duplication.]
+  two audiences, zero duplication. Example: /context skill.]
 
 ### Slide 15: Design Pattern: Small World, Many Agents
 
@@ -177,16 +188,12 @@ Each pattern has a concept slide followed by an example slide.
 
 ### Slide 16: Example: Small World, Many Agents
 
-- Pattern: deterministic scripts collect and prepare data, then
-  focused agents review with purpose-built prompts
+- /add-release-notes:
+  collect.sh -> prepare.sh -> review.sh + review-prompt.md
+- /cve-fix:
+  detect.sh -> fix-all.sh -> review.sh + review-prompt.md
 - Each agent gets pre-fetched evidence — it evaluates, never searches
 - Per-unit commits for reviewability and revertability
-- [Example: release notes — one agent per Jira issue, each gets
-  pre-fetched data from Jira, bug tracker, GitHub PRs, and git logs.
-  Agent only decides keep/remove; each removal is a separate commit.]
-- [Example: CVE fix — one agent per repo, each given scan results,
-  fix summary, and package location data. Agent reviews the
-  deterministic fixes and handles remaining ambiguous cases.]
 
 ### Slide 17: Design Pattern: Proper Plans
 
@@ -198,14 +205,14 @@ Each pattern has a concept slide followed by an example slide.
 
 - Written design docs before implementation pay off enormously
   when agent execution depends on getting the structure right
-- Good plans enable complex automation: one command generating
-  dozens of files across multiple commits, only possible because
-  the design was fully worked out first
-- [Example: a setup script generates 49 files across 3 commits —
-  the planning phase was longer than the implementation]
-- [Example: enhancement proposals written as agent-consumable specs
-  (like plan mode extracted to a shared repo for review) — the plan
-  is the spec the agent follows to implement]
+- seps/SEP-0031-modernize-enhancements.md
+  -> enhancements/pull/267
+- seps/SEP-0032-cve-fix-refactoring.md
+  -> shipyard/pull/2383
+- Enhancement proposals as agent-consumable specs — like plan mode
+  extracted to a shared repo for review
+- configure-downstream.sh: 49 files across 3 commits — the planning
+  phase was longer than the implementation
 
 ---
 
