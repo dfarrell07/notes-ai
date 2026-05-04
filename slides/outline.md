@@ -228,8 +228,10 @@ Each pattern has a concept slide followed by an example slide.
   (cluster credentials, registry auth, entitlements, GitHub/Jira
   tokens, signing keys) — today runs on a developer laptop, but
   that doesn't scale
-- [Note: the secrets/hosting question is a real unsolved problem that
-  the audience may have insights on. Good way to open discussion.]
+- Open question: what should the top-level UI be?
+  Slack bot? MCP endpoint? CLI? Something else?
+- [Note: both open questions are unsolved and good for audience
+  discussion.]
 
 ---
 
