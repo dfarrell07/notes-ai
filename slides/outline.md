@@ -78,10 +78,7 @@ agent automation. Examples drawn from release management automation
 
 ## Part 3: Design Patterns
 
-Each pattern has two types of slides:
-
-- **"Design Pattern — [Name]"** introduces the idea
-- **"[Name]"** (same title, no prefix) shows concrete examples
+Each pattern has a concept slide followed by an example slide.
 
 ### Slide 7: Design Pattern — Pseudocode as Prototype
 
@@ -136,7 +133,7 @@ Each pattern has two types of slides:
 - Write once, serve both audiences
 - Massively increases productivity of docs
 
-### Slide 13: Pulse-Agnostic Docs
+### Slide 13: Pulse-Agnostic Docs — Example
 
 - Use a consistent document structure that works for both:
   - "When" = trigger condition for a human, precondition for an agent
@@ -154,7 +151,7 @@ Each pattern has two types of slides:
 - Craft data to create focused context for agents
 - Invoke many agents in parallel, each focused on a discrete problem
 
-### Slide 15: Small World, Many Agents
+### Slide 15: Small World, Many Agents — Example
 
 - Pattern: deterministic scripts collect and prepare data, then
   focused agents review with purpose-built prompts
@@ -173,7 +170,7 @@ Each pattern has two types of slides:
 - (all the well-known relevant expressions)
 - More human effort collaborating on plans before agent execution
 
-### Slide 17: Proper Plans
+### Slide 17: Proper Plans — Example
 
 - Written design docs before implementation pay off enormously
   when agent execution depends on getting the structure right
