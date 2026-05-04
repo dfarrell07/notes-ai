@@ -224,9 +224,12 @@ Each pattern has a concept slide followed by an example slide.
 - No loop tracking, no history — re-check structured state each time
   and pick the next incomplete step
 - "The quality bar shifts entirely to the state checker's thoroughness"
-- [Note: this is a forward-looking design idea. The conductor emerged
-  from the experience of building 15 individual skills — the next
-  natural step. Opens the floor for questions.]
+- Open question: how to host skill automation that needs many secrets?
+  (cluster credentials, registry auth, entitlements, GitHub/Jira
+  tokens, signing keys) — today runs on a developer laptop, but
+  that doesn't scale
+- [Note: the secrets/hosting question is a real unsolved problem that
+  the audience may have insights on. Good way to open discussion.]
 
 ---
 
