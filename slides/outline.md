@@ -32,7 +32,17 @@ agent automation. Examples drawn from release management automation
 - Patterns emerged that apply to any domain
 - All early lessons, would love to hear feedback from others
 
-### Slide 3: Demo Start
+### Slide 3: What a Skill Ecosystem Looks Like
+
+- Skills: 15 slash commands
+- Make: 27 targets
+- Scripts: 28 scripts, 9,772 lines
+- Docs: 22 workflow runbooks
+- Configs: 88 release YAMLs
+- Covering a 20-step release lifecycle that was previously
+  entirely manual
+
+### Slide 4: Demo Start
 
 - Starting one of the skills in the background
 - We'll check results at end of talk
@@ -44,7 +54,7 @@ agent automation. Examples drawn from release management automation
 
 ## Part 2: Core Lessons
 
-### Slide 4: Core Lesson — New Domains of Automation
+### Slide 5: Core Lesson: New Domains of Automation
 
 - Custom, complex automation that would not have been practical before
   is now possible to produce quickly and maintain
@@ -52,7 +62,7 @@ agent automation. Examples drawn from release management automation
 - Processes should be Written-Down-as-Automation
 - Shared skills and custom skills are both valuable
 
-### Slide 5: Core Lesson — Design Around Indeterminism
+### Slide 6: Core Lesson: Design Around Indeterminism
 
 - Extract as much work to deterministic logic as possible
 - Treat agent call like a function call for "fuzzy" logic that would
@@ -65,7 +75,7 @@ agent automation. Examples drawn from release management automation
 - [Example: a 536-line script handles SHA extraction/validation
   deterministically — agent is only invoked for release notes review]
 
-### Slide 6: Core Lesson — Design the Context
+### Slide 7: Core Lesson: Design the Context
 
 - In your Claude interactive sessions, more context is typically better
 - In Claude instances that are meant to solve a narrower problem
@@ -80,7 +90,7 @@ agent automation. Examples drawn from release management automation
 
 Each pattern has a concept slide followed by an example slide.
 
-### Slide 7: Design Pattern: Pseudocode as Prototype
+### Slide 8: Design Pattern: Pseudocode as Prototype
 
 - Skills can start as English descriptions of processes in Markdown,
   but they can run like code
@@ -88,7 +98,7 @@ Each pattern has a concept slide followed by an example slide.
 - Skills naturally evolve through four phases
 - Most skills converge at Phase 3
 
-### Slide 8: Phase 0 — Mostly md
+### Slide 9: Phase 0 — Mostly md
 
 - Write the process in English as a markdown document
 - Claude reads it and follows it like a runbook
@@ -96,7 +106,7 @@ Each pattern has a concept slide followed by an example slide.
 - [Example: a workflow doc describing CVE scanning steps, a runbook
   for configuring downstream builds]
 
-### Slide 9: Phase 1 — Mixed md/sh
+### Slide 10: Phase 1 — Mixed md/sh
 
 - Embed bash snippets in the skill definition
 - Markdown provides structure and decision logic;
@@ -105,7 +115,7 @@ Each pattern has a concept slide followed by an example slide.
 - [Example: a skill definition with 1,484 lines of inline bash —
   this worked but was the forcing function for evolving further]
 
-### Slide 10: Phase 2 — Mostly sh
+### Slide 11: Phase 2 — Mostly sh
 
 - The scripts do the heavy lifting
 - Skill wraps one or more scripts with markdown framing
@@ -113,7 +123,7 @@ Each pattern has a concept slide followed by an example slide.
 - [Example: release notes script called by skill, CVE fix scripts
   called by skill wrapper]
 
-### Slide 11: Phase 3 — All sh, optional agent
+### Slide 12: Phase 3 — All sh, optional agent
 
 - The script IS the logic — it runs standalone
 - Three entry points to the same code:
@@ -127,13 +137,13 @@ Each pattern has a concept slide followed by an example slide.
   pattern was clear. Inline skills couldn't be tested independently,
   used from CI, or debugged outside Claude.]
 
-### Slide 12: Design Pattern: Pulse-Agnostic Docs
+### Slide 13: Design Pattern: Pulse-Agnostic Docs
 
 - Create context for agents that's also docs for humans
 - Write once, serve both audiences
 - Massively increases productivity of docs
 
-### Slide 13: Example: Pulse-Agnostic Docs
+### Slide 14: Example: Pulse-Agnostic Docs
 
 - Use a consistent document structure that works for both:
   - "When" = trigger condition for a human, precondition for an agent
@@ -146,12 +156,12 @@ Each pattern has a concept slide followed by an example slide.
 - [Example: 22 workflow docs serve as both agent context and team
   runbooks. Same artifacts, two audiences, zero duplication.]
 
-### Slide 14: Design Pattern: Small World, Many Agents
+### Slide 15: Design Pattern: Small World, Many Agents
 
 - Craft data to create focused context for agents
 - Invoke many agents in parallel, each focused on a discrete problem
 
-### Slide 15: Example: Small World, Many Agents
+### Slide 16: Example: Small World, Many Agents
 
 - Pattern: deterministic scripts collect and prepare data, then
   focused agents review with purpose-built prompts
@@ -164,13 +174,13 @@ Each pattern has a concept slide followed by an example slide.
   fix summary, and package location data. Agent reviews the
   deterministic fixes and handles remaining ambiguous cases.]
 
-### Slide 16: Design Pattern: Proper Plans
+### Slide 17: Design Pattern: Proper Plans
 
 - Effort into quality plans is massively productive
 - (all the well-known relevant expressions)
 - More human effort collaborating on plans before agent execution
 
-### Slide 17: Example: Proper Plans
+### Slide 18: Example: Proper Plans
 
 - Written design docs before implementation pay off enormously
   when agent execution depends on getting the structure right
@@ -186,7 +196,7 @@ Each pattern has a concept slide followed by an example slide.
 
 ## Part 4: Wrap Up
 
-### Slide 18: Lessons Learned
+### Slide 19: Lessons Learned
 
 - Inline skills become unmaintainable at ~1,000 lines — extract to
   standalone scripts with thin skill wrappers
@@ -199,13 +209,13 @@ Each pattern has a concept slide followed by an example slide.
 - [Note: these lessons add authenticity. The audience wants to know
   what not to do, not just what worked.]
 
-### Slide 19: Demo End
+### Slide 20: Demo End
 
 - Check on skill results
 - [Note: the payoff — the skill has been running throughout the talk.
   Show the results live.]
 
-### Slide 20: What's Next
+### Slide 21: What's Next
 
 - Conductor pattern: a meta-skill that orchestrates other skills
 - Key insight: stateless re-evaluation, not a state machine
@@ -220,9 +230,6 @@ Each pattern has a concept slide followed by an example slide.
 
 ## Possible Additions
 
-- **Scale slide** — one slide showing what a mature skill ecosystem
-  looks like (15 skills, 28 scripts, 22 docs, etc.) if audience
-  would benefit from seeing the scope
 - **Live demo of a status dashboard** — concretize "Design the
   Context" if time allows a second demo moment
 - **Audience interaction** — "what processes in your work could be
