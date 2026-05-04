@@ -90,8 +90,10 @@ agent automation. Examples drawn from release management automation
   both humans and agents. The agent doesn't see the whole system —
   it sees exactly what it needs to evaluate the current state.]
 - [Note: Anthropic calls this "context engineering" — "finding the
-  smallest possible set of high-signal tokens." Chroma's research
-  shows irrelevant context actively misleads models ("context rot").]
+  smallest possible set of high-signal tokens." Non-interactive agents
+  are single-shot (claude -p --print), so it's not about context
+  degrading over time — it's about starting with only what's needed.
+  Principle of least privilege applied to context.]
 
 ---
 
@@ -141,11 +143,12 @@ Each pattern has a concept slide followed by an example slide.
   - Skill wrapper (Claude — thin wrapper that exec's the script)
 - Agent adds judgment only where deterministic logic can't
 - Most skills naturally converge here
-- [Note: this is Hexagonal Architecture (Ports and Adapters) applied
-  to skills — same logic, multiple driving adapters. Emerged from
-  real pain: four skills refactored from Phase 1 to Phase 3 in a
-  single day. Inline skills couldn't be tested, used from CI, or
-  debugged outside Claude.]
+- [Note: three entry points are thin aliases — make and skill both
+  just call the script. The value is meeting users where they are:
+  CI calls the script, humans type make, Claude uses the skill.
+  Emerged from real pain: four skills refactored from Phase 1 to
+  Phase 3 in a single day. Inline skills couldn't be tested, used
+  from CI, or debugged outside Claude.]
 
 ### Slide 13: Design Pattern: Pulse-Agnostic Docs
 
@@ -170,7 +173,7 @@ Each pattern has a concept slide followed by an example slide.
 ### Slide 15: Design Pattern: Small World, Many Agents
 
 - Craft data to create focused context for agents
-- Invoke many agents in parallel, each focused on a discrete problem
+- Invoke many focused agents, each on a discrete problem
 
 ### Slide 16: Example: Small World, Many Agents
 
