@@ -29,7 +29,7 @@ What a Skill Ecosystem Looks Like
 
 - 16 skills | 52 make targets | 66 scripts (14,880 lines)
 - 33 context docs (for both humans and agents)
-- 9 repos, 20-step lifecycle, previously entirely manual
+- 9 repos, 26-step lifecycle, previously entirely manual
 
 ---
 
