@@ -142,7 +142,7 @@ Each pattern: concept slide then example slide.
 
 ### Slide 16: Design Pattern: Small World, Many Agents
 
-- Pre-fetch evidence deterministically, create focused context
+- Craft data deterministically, create focused context for agents
 - Many agents in parallel, each on a discrete problem
 
 ### Slide 17: Example: Small World, Many Agents
