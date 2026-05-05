@@ -9,6 +9,13 @@ Skill Design Patterns
 
 ---
 
+Topic
+
+- Real value is in applying skill design lessons to your context
+- Will use release management automation as examples for bigger ideas
+
+---
+
 Level-Setting
 
 - "Skill" -> "Claude skill"

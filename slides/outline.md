@@ -20,21 +20,24 @@ agent automation. Examples drawn from release management automation
 
 - Skill Design Patterns
 
-### Slide 2: Level-Setting
+### Slide 2: Topic
+
+- Real value is in applying skill design lessons to your context
+- Will use release management automation as examples for bigger ideas
+
+### Slide 3: Level-Setting
 
 - "Skill" = Claude skill
 - Claude interactive -> automation that runs Claude non-interactively
 - 19 skills for release management, goal: handoff-ready
-- [Note: built for building, testing, securing, shipping releases.
-  Patterns apply to any domain. Early lessons, seeking feedback.]
 
-### Slide 3: What a Skill Ecosystem Looks Like
+### Slide 4: What a Skill Ecosystem Looks Like
 
 - 19 skills | 27 make targets | 28 scripts (9,772 lines)
 - 22 workflow docs (context for both humans and agents)
 - 7+ repos, 20-step lifecycle, previously entirely manual
 
-### Slide 4: Demo Start
+### Slide 5: Demo Start
 
 - Starting a skill in the background — check results at end
 - [Note: use /cve-fix. Don't explain what it does; the point is
@@ -44,14 +47,14 @@ agent automation. Examples drawn from release management automation
 
 ## Part 2: Core Lessons
 
-### Slide 5: Core Lesson: New Domains of Automation
+### Slide 6: Core Lesson: New Domains of Automation
 
 - Complex automation that wasn't practical before — now feasible
 - Still build on shared, quality tools
 - Processes should be Written-Down-as-Automation
 - Shared skills and custom skills both valuable
 
-### Slide 6: Core Lesson: Design Around Indeterminism
+### Slide 7: Core Lesson: Design Around Indeterminism
 
 - Extract as much work to deterministic logic as possible
 - Agent call = function call for "fuzzy" logic
@@ -64,7 +67,7 @@ agent automation. Examples drawn from release management automation
   is 536 lines of deterministic SHA work — agent only for release
   notes. Salesforce calls this "guided determinism."]
 
-### Slide 7: Core Lesson: Design the Context
+### Slide 8: Core Lesson: Design the Context
 
 - Interactive: more context is typically better
 - Non-interactive: unnecessary context causes inconsistencies
@@ -80,25 +83,25 @@ agent automation. Examples drawn from release management automation
 
 Each pattern: concept slide then example slide.
 
-### Slide 8: Design Pattern: Pseudocode as Prototype
+### Slide 9: Design Pattern: Pseudocode as Prototype
 
 - Skills start as English in Markdown, but run like code
 - Recommended way to get started
 - Four phases — most skills converge at Phase 3
 
-### Slide 9: Phase 0 — Mostly md
+### Slide 10: Phase 0 — Mostly md
 
 - English process doc — Claude follows it like a runbook
 - [submariner/.agents/workflows/cve-fix.md](https://github.com/submariner-io/submariner/blob/devel/.agents/workflows/cve-fix.md)
 - [submariner-release-management/.agents/workflows/scan-cves.md](https://github.com/stolostron/submariner-release-management/blob/main/.agents/workflows/scan-cves.md)
 
-### Slide 10: Phase 1 — Mixed md/sh
+### Slide 11: Phase 1 — Mixed md/sh
 
 - Markdown structure + embedded bash for precision
 - Hard to maintain at ~1,000 lines
 - [skills/cve-fix/SKILL.md](https://github.com/submariner-io/shipyard/pull/2383/files)
 
-### Slide 11: Phase 2 — Mostly sh
+### Slide 12: Phase 2 — Mostly sh
 
 - Scripts do the heavy lifting, skill wraps them
 - /add-release-notes ->
@@ -106,7 +109,7 @@ Each pattern: concept slide then example slide.
 - /cve-fix ->
   [shipyard/pull/2383](https://github.com/submariner-io/shipyard/pull/2383)
 
-### Slide 12: Phase 3 — All sh, optional agent
+### Slide 13: Phase 3 — All sh, optional agent
 
 - Script runs standalone — three entry points:
   - Script (CI) | Make (humans) | Skill (Claude)
@@ -121,12 +124,12 @@ Each pattern: concept slide then example slide.
   where they are. Four skills refactored from Phase 1 to Phase 3
   in a single day.]
 
-### Slide 13: Design Pattern: Pulse-Agnostic Docs
+### Slide 14: Design Pattern: Pulse-Agnostic Docs
 
 - Context for agents that's also docs for humans
 - Write once, serve both audiences
 
-### Slide 14: Example: Pulse-Agnostic Docs
+### Slide 15: Example: Pulse-Agnostic Docs
 
 - When | Process | Done When
 - Same doc: trigger/precondition, steps/instructions,
@@ -136,12 +139,12 @@ Each pattern: concept slide then example slide.
 - [Note: 22 docs in orchestration repo + 5 upstream repos — same
   format everywhere. Zero duplication.]
 
-### Slide 15: Design Pattern: Small World, Many Agents
+### Slide 16: Design Pattern: Small World, Many Agents
 
 - Pre-fetch evidence deterministically, create focused context
 - Many agents in parallel, each on a discrete problem
 
-### Slide 16: Example: Small World, Many Agents
+### Slide 17: Example: Small World, Many Agents
 
 - /add-release-notes:
   [collect](https://github.com/stolostron/submariner-release-management/blob/main/scripts/release-notes/collect.sh)
@@ -153,12 +156,12 @@ Each pattern: concept slide then example slide.
   ([PR](https://github.com/submariner-io/shipyard/pull/2383))
 - Agent evaluates, never searches — per-unit revertable commits
 
-### Slide 17: Design Pattern: Proper Plans
+### Slide 18: Design Pattern: Proper Plans
 
 - Plans for agents deserve more rigor, not less
 - Ambiguity a human navigates = failure mode for agents
 
-### Slide 18: Example: Proper Plans
+### Slide 19: Example: Proper Plans
 
 - [SEP-0031](https://github.com/submariner-io/enhancements/blob/devel/seps/SEP-0031-modernize-enhancements.md)
   -> [enhancements/pull/267](https://github.com/submariner-io/enhancements/pull/267)
@@ -173,18 +176,18 @@ Each pattern: concept slide then example slide.
 
 ## Part 4: Wrap Up
 
-### Slide 19: Lessons Learned
+### Slide 20: Lessons Learned
 
 - Inline skills unmaintainable at ~1,000 lines -> extract to scripts
 - `set -e` silently swallows errors -> use `&&`/`||`
 - Real usage is the only reliable test
 - Human-in-the-loop at danger points
 
-### Slide 20: Demo End
+### Slide 21: Demo End
 
 - Check on skill results
 
-### Slide 21: What's Next
+### Slide 22: What's Next
 
 - Conductor: meta-skill, stateless re-evaluation, no state machine
 - "Quality bar shifts to the state checker's thoroughness"
