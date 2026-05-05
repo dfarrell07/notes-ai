@@ -86,7 +86,7 @@ Each pattern: concept slide then example slide.
 ### Slide 9: Design Pattern: Pseudocode as Prototype
 
 - Skills start as English in Markdown, but run like code
-- Like runbook automation, but Phase 0 runs without code
+- Like literate programming, but the agent is the compiler
 - Recommended way to get started
 - Four phases — most skills converge at Phase 3
 
