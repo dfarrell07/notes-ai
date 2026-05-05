@@ -13,14 +13,14 @@ Level-Setting
 
 - "Skill" -> "Claude skill"
 - Claude interactive -> automation that runs Claude non-interactively
-- 16 skills for release management, goal: handoff-ready
+- ~20 skills for release management, goal: handoff-ready
 - All early lessons, would love to hear feedback from others
 
 ---
 
 What a Skill Ecosystem Looks Like
 
-- 16 skills | 27 make targets | 28 scripts (9,772 lines)
+- ~20 skills | 27 make targets | 28 scripts (9,772 lines)
 - 22 workflow docs (context for both humans and agents)
 - 7+ repos, 20-step lifecycle, previously entirely manual
 
