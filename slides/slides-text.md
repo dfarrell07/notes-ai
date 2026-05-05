@@ -11,8 +11,8 @@ Skill Design Patterns
 
 Topic
 
-- Real value is in applying skill design lessons to your context
-- Will use release management automation as examples for bigger ideas
+- Skill design lessons that apply to your context
+- Release management automation as examples for bigger ideas
 
 ---
 
