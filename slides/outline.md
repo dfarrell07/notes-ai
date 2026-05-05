@@ -22,8 +22,8 @@ agent automation. Examples drawn from release management automation
 
 ### Slide 2: Topic
 
-- Skill design lessons that apply to your context
-- Release management automation as examples for bigger ideas
+- Patterns that emerged while creating skills for project automations
+- Lessons from improving agent reliability, skill repeatability
 
 ### Slide 3: Level-Setting
 
