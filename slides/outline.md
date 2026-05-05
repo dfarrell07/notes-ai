@@ -88,7 +88,7 @@ Each pattern: concept slide then example slide.
 - Skills start as English in Markdown, but run like code
 - Like literate programming, but the agent is the compiler
 - Recommended way to get started
-- Four phases — most skills converge at Phase 3
+- Four phases — right phase depends on the task
 
 ### Slide 10: Phase 0 — Mostly md
 
