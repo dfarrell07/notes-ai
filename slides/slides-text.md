@@ -9,7 +9,7 @@ Skill Design Patterns
 
 ---
 
-What's a Skill & Why It Matters
+Level-Setting
 
 - "Skill" -> "Claude skill"
 - Claude interactive -> automation that runs Claude non-interactively

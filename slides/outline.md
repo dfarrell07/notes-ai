@@ -20,7 +20,7 @@ agent automation. Examples drawn from release management automation
 
 - Skill Design Patterns
 
-### Slide 2: What's a Skill & Why It Matters
+### Slide 2: Level-Setting
 
 - "Skill" = Claude skill
 - Claude interactive -> automation that runs Claude non-interactively
