@@ -24,13 +24,13 @@ agent automation. Examples drawn from release management automation
 
 - "Skill" = Claude skill
 - Claude interactive -> automation that runs Claude non-interactively
-- ~15 skills for release management, goal: handoff-ready
+- 16 skills for release management, goal: handoff-ready
 - [Note: built for building, testing, securing, shipping releases.
   Patterns apply to any domain. Early lessons, seeking feedback.]
 
 ### Slide 3: What a Skill Ecosystem Looks Like
 
-- 15 skills | 27 make targets | 28 scripts (9,772 lines)
+- 16 skills | 27 make targets | 28 scripts (9,772 lines)
 - 22 workflow docs (context for both humans and agents)
 - 7+ repos, 20-step lifecycle, previously entirely manual
 
