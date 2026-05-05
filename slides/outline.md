@@ -8,7 +8,7 @@ tags: [outline, slide-deck, talk-prep, skill-design-patterns]
 
 General-audience talk about patterns for building Claude skills and
 agent automation. Examples drawn from release management automation
-(~15 skills) but patterns are universally applicable.
+(16 skills) but patterns are universally applicable.
 
 <!-- Slide content = what's on screen (short). [Notes] = what you say. -->
 
@@ -33,9 +33,9 @@ agent automation. Examples drawn from release management automation
 
 ### Slide 4: What a Skill Ecosystem Looks Like
 
-- 16 skills | 27 make targets | 28 scripts (9,772 lines)
+- 16 skills | 52 make targets | 66 scripts (14,880 lines)
 - 33 context docs (for both humans and agents)
-- 7+ repos, 20-step lifecycle, previously entirely manual
+- 8 repos, 20-step lifecycle, previously entirely manual
 
 ### Slide 5: Demo Start
 
