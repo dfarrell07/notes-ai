@@ -34,7 +34,7 @@ agent automation. Examples drawn from release management automation
 ### Slide 4: What a Skill Ecosystem Looks Like
 
 - 19 skills | 27 make targets | 28 scripts (9,772 lines)
-- 41 workflow docs (context for both humans and agents)
+- 33 workflow docs (context for both humans and agents)
 - 7+ repos, 20-step lifecycle, previously entirely manual
 
 ### Slide 5: Demo Start
