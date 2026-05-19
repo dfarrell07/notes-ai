@@ -579,3 +579,150 @@ kubectl plugin distribution via krew index updates.
 - Release management skills for Claude Code
 - Stage/prod release workflow
 - Container signing and SBOM
+
+## 12. CI Scaffold Plan — Day One Files
+
+Concrete plan for the files to create before any code lands. These
+go into the MCN repo root. 22 files total.
+
+### 12.1 File Inventory
+
+```text
+.golangci.yml               — Go linting (adapted from submariner-operator)
+.markdownlint.yml            — Markdown linting (140 char lines)
+.yamllint.yml                — YAML linting (140 char lines)
+.shellcheckrc                — Shell script linting (SC1090, SC2154)
+.gitlint                     — Commit message linting
+.grype.yaml                  — Vuln scan false positive suppression
+.markdownlinkcheck.json      — Markdown link check config
+staticcheck.conf             — Go staticcheck initialisms
+.github/dependabot.yml       — GHA monthly + Go mod weekly updates
+.github/workflows/
+  linting.yml                — 12-job linting (PR trigger)
+  unit.yml                   — Go unit tests (PR trigger)
+  branch.yml                 — Enforce PR targets main/release-*
+  stale.yml                  — Close stale issues/PRs (daily cron)
+  periodic.yml               — Weekly full link check (Sunday cron)
+  release.yml                — Build/push images (merge trigger)
+  codeowners.yml             — Verify CODEOWNERS (PR trigger)
+  ai-security-review.yml     — Claude security review (PR trigger)
+  ai-rbac-review.yml         — Claude RBAC review (path-filtered PR)
+  ai-release-notes.yml       — Claude release note suggestions (PR)
+Makefile                     — Standalone build system (no Shipyard)
+Dockerfile                   — Multi-stage operator image
+CLAUDE.md                    — Claude Code project conventions
+```
+
+### 12.2 Linting Configs — Adaptation Notes
+
+**`.golangci.yml`** — Copy from `submariner-operator/.golangci.yml`
+(248 lines, v2 format) with these changes:
+
+- goheader template: "Submariner project" to "MCN project"
+- Remove exclusions for `pkg/embeddedyamls/yamls.go` (Submariner
+  generated file)
+- Remove exclusion for `BrokerK8sApiServer` struct field
+- Remove exclusion for `pkg/metrics/service-monitor.go` goheader
+- Keep everything else: 60+ linters, 140 char lines,
+  Ginkgo/Gomega dot-imports, all 4 formatters (gci, gofmt,
+  gofumpt, goimports), govet fieldalignment, gocyclo min 15
+
+**Other configs** — Direct copies from Submariner with minimal
+MCN-specific path adjustments in `.yamllint.yml` ignore list.
+
+### 12.3 Linting Workflow — 12 Parallel Jobs
+
+Adapted from Submariner's 14-job `linting.yml`. Uses direct tool
+invocation instead of Shipyard `make` targets. Go-specific jobs
+guarded with `if: hashFiles('go.mod') != ''` to skip gracefully
+before Go code exists.
+
+Jobs:
+
+1. `apply-suggestions-commits` — block "Apply suggestions" and
+   "fixup!" commits (same SHA-pinned actions as Submariner)
+2. `gitlint` — commit message format via `pip install gitlint`
+3. `golangci-lint` — via `golangci/golangci-lint-action`
+4. `markdown-link-check` — modified files only via
+   `gaurav-nelson/github-action-markdown-link-check`
+5. `markdownlint` — via `npx markdownlint-cli2`
+6. `shellcheck` — `find . -name "*.sh" | xargs shellcheck`
+7. `yamllint` — via `pip install yamllint`
+8. `govulncheck` — Go vulnerability scanning
+9. `variant-analysis` — CodeQL for Go with SARIF
+10. `vulnerability-scan` — Anchore with SARIF upload, fail on HIGH
+11. `crds` — verify generated CRDs match committed (controller-gen
+    diff check)
+12. `licenses` — dependency license audit (lichen)
+
+Dropped from Submariner: `bundle` (no OLM bundle yet),
+`check-branch-dependencies` (single repo), `yamls` (no embedded
+YAMLs), `packagedoc-lint` (add later).
+
+### 12.4 AI Agent PR Reviews — New for MCN
+
+All three use `anthropics/claude-code-action@v1` with
+`ANTHROPIC_API_KEY` repo secret. All non-blocking (informational
+PR comments only). All use `use_sticky_comment: true` to update
+the same comment on new pushes rather than flooding.
+
+#### Security Review Agent
+
+- Trigger: every non-draft PR
+- Analyzes diff for: RBAC changes (ClusterRole, Role,
+  RoleBinding), privilege escalation, secrets handling, security
+  context changes (runAsRoot, privileged, capabilities), network
+  policy changes, hardcoded credentials, undigested image refs
+- Confidence scoring, only reports findings with confidence >= 80
+- Severity levels: CRITICAL, HIGH, MEDIUM
+- Read-only tools: `gh pr diff`, `grep`, `find`, `Read`
+
+#### RBAC Change Review Agent
+
+- Trigger: PRs that modify RBAC-related files only
+- Path filters: `config/rbac/**`, `**/role*.yaml`,
+  `**/clusterrole*.yaml`, `**/*_types.go`, `**/controller*.go`
+- Detailed permission change analysis against controller source
+- Least-privilege verification — does the controller actually use
+  these permissions?
+- Output: summary table (Resource, Verbs, Scope, Justification)
+- Flags wildcard verbs/resources and cluster-scope that could be
+  namespace-scope
+
+#### Release Notes Agent
+
+- Trigger: every non-draft PR
+- Detects: API/CRD field changes, breaking changes, new features,
+  deprecations, config changes, default value changes, new
+  controller behaviors
+- Internal-only changes (refactoring, tests, CI, dep bumps) get
+  "No release note needed" response
+- Suggests actual release note text with category: Feature, Bug
+  Fix, Breaking Change, Deprecation, Enhancement
+- Checks for existing release note labels/annotations
+
+### 12.5 Supporting Files
+
+**Makefile** — Standalone (no Shipyard includes). Targets: build,
+test, lint, golangci-lint, markdownlint, yamllint, shellcheck,
+govulncheck, manifests, generate, images, clean, help. Version
+from git tags via LDFLAGS.
+
+**Dockerfile** — Multi-stage: `golang:1.24` builder with
+TARGETARCH cross-compilation, `distroless/static:nonroot` final.
+
+**CLAUDE.md** — Project conventions: build commands, commit
+standards (--signoff required), test framework (Ginkgo/Gomega),
+license (Apache-2.0), line length (140 chars).
+
+### 12.6 Secrets Required
+
+- `ANTHROPIC_API_KEY` — Claude API access (AI review workflows)
+- `QUAY_USERNAME` / `QUAY_PASSWORD` — push images (release.yml)
+
+### 12.7 CI Platform Split
+
+- **GitHub Actions**: all linting, unit tests, security scanning,
+  AI reviews, image builds, governance (stale, branch protection)
+- **Prow (OpenShift CI)**: e2e and integration tests — separate
+  config in `openshift/release` repo, tracked by CORENET-7083
