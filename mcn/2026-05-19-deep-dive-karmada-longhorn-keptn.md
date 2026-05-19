@@ -220,3 +220,87 @@ API Changes, Design, Test Plan, Upgrade Strategy. Features tagged
 
 **MCN**: Lightweight version of Kubernetes KEPs. Worth adopting
 for MCN architectural decisions.
+
+## Karmada — Key Findings
+
+### 19. PR Performance Comparison with Matplotlib
+
+Files: `.github/workflows/ci-performance-compare.yaml`,
+`hack/performance/collect-metrics.sh` (836 lines),
+`hack/performance/visualize-metrics.py`
+
+`workflow_dispatch` with `target_pr_number` input. Runs ClusterLoader2
+on base AND PR in parallel. Collects 10 Prometheus metric categories
+(P50/P90/P99 latencies, throughput, queue depths, CPU/memory).
+Matplotlib generates baseline (dashed) vs target (solid) charts.
+
+**MCN**: Performance regression detection before merge with visual
+diffs. Best perf comparison pattern found.
+
+### 20. 40-Combination API Compatibility Matrix
+
+File: `.github/workflows/ci-schedule-compatibility.yaml`
+
+10 K8s API server versions (1.26-1.35) x 4 Karmada versions
+(master + 3 release branches) = 40 combinations. Weekend-only
+schedule. `max-parallel: 5` throttle.
+
+**MCN**: Widest K8s compatibility matrix found. For multi-cluster
+projects, test control plane against member cluster API versions.
+
+### 21. CRD Survival Test After Helm Uninstall
+
+File: `.github/workflows/installation-chart.yaml`
+
+After `helm uninstall`, verifies CRD still exists — prevents
+accidental cascade deletion of CRDs and their data.
+
+**MCN**: Critical test for any Helm-distributed operator.
+
+### 22. Three Installation Methods, Each with K8s Matrix
+
+Files: `installation-chart.yaml`, `installation-cli.yaml`,
+`installation-operator.yaml`
+
+Helm, CLI, and Operator installation each tested against 3 K8s
+versions. Different E2E entry points per method.
+
+**MCN**: If MCN supports multiple installation methods, test
+each independently.
+
+### 23. Gemini AI Review with Secure Coding Style Guide
+
+Files: `.gemini/config.yaml`, `.gemini/styleguide.md`
+
+Custom style guide includes: interface compliance checks, max 5
+function parameters, prohibit hardcoded credentials and custom
+cryptography, changelog formatting rules.
+
+**MCN**: First project seen with secure coding rules in an AI
+review style guide. Worth including security rules in MCN's
+CLAUDE.md.
+
+### 24. SECURITY-INSIGHTS.yml
+
+File: `SECURITY-INSIGHTS.yml`
+
+OSSF standard for machine-processable security metadata. Same
+pattern as Keptn. Declares tools (Dependabot, Trivy), contacts,
+SBOM references, dependencies policy.
+
+**MCN**: Emerging standard — adopt alongside OSSF Scorecard.
+
+### 25. 4 Separate SLSA Provenance Attestations
+
+File: `.github/workflows/release.yml`
+
+Separate provenance for: CLI binaries, CRDs, Helm charts, SBOMs.
+Most granular SLSA implementation found.
+
+### 26. golangci-lint v2 with modernize + depguard
+
+File: `.golangci.yml`
+
+`modernize` linter with `omitzero` disabled (would change
+metav1.ObjectMeta tags). depguard blocks `gopkg.in/yaml.v3`
+(archived April 2025, use `sigs.k8s.io/yaml`).
