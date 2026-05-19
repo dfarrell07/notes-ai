@@ -319,3 +319,212 @@ dependency lockstep). But Dependabot is zero-setup on GitHub.
 Recommendation: Start with Dependabot (zero effort). Switch to
 Renovate if dependency management gets complex (multiple modules,
 cross-file updates needed).
+
+## Extended Survey — 35 Additional Projects
+
+Surveyed 35 more K8s projects (total: 52). Below are the best
+novel patterns organized by category.
+
+### CI Security Hardening
+
+**step-security/harden-runner** (Argo CD, External Secrets) —
+network egress control for GHA runners. Block mode with explicit
+endpoint allowlists for workflows handling secrets or publishing
+artifacts. Strong supply chain security primitive.
+
+**zgosalvez/github-actions-ensure-sha-pinned-actions** (Kyverno) —
+verifies every GHA reference uses SHA pin, not mutable tag.
+Prevents tag hijacking attacks. Supports allowlists for actions
+requiring semver tags.
+
+**TruffleHog secret scanning** (Loki) — scans PR diffs for
+verified secrets with `--only-verified` flag. Minimal false
+positives, complements GitHub's built-in secret scanning.
+
+**actions/dependency-review-action** (External Secrets, Tekton) —
+GitHub-native, blocks PRs introducing known-vulnerable packages.
+Free, should be enabled on every project.
+
+### CI Workflow Management
+
+**Workflow failure issue tracker** (Kyverno) — when CI on main
+fails, auto-creates GitHub issue with run metadata. When it
+later succeeds, auto-closes the issue. Much better than email
+notifications.
+
+**Pass-CI / Skip-CI companion pattern** (Harbor, Chaos Mesh) —
+solves GitHub's "required but skipped checks block merge"
+problem. Companion workflow provides no-op jobs with same names
+for paths the real CI skips.
+
+**Fake DCO for merge queue** (Jaeger, Chaos Mesh) — stub workflow
+on `merge_group` events for checks that only run on
+`pull_request`. Unblocks merge queue.
+
+**Trust-tiered CI parallelism** (Jaeger) — trusted contributors
+(org members, 5+ merged PRs) get parallel CI (~10 min).
+External contributors get sequential (~30 min). Saves compute
+while gatekeeping.
+
+**Draft-PR-aware reduced test matrix** (Tekton) — draft PRs run
+minimal matrix (amd64, latest K8s). Non-draft PRs run full
+matrix (multi-arch, multi-version, all feature gates).
+
+### Testing Innovations
+
+**Antithesis autonomous fault injection** (etcd) — pushes images
+to Antithesis cloud platform for random fault injection (network
+partitions, crashes, clock skew). Finds correctness bugs in
+distributed systems that scripted e2e misses.
+
+**CIFuzz / OSS-Fuzz in PR CI** (CoreDNS, MetalLB, KubeEdge) —
+Google's continuous fuzzing infrastructure in every PR. 10-20
+min of fuzzing per PR. Catches security-relevant input-handling
+bugs before merge. Register project with OSS-Fuzz.
+
+**Version skew testing** (Dapr) — tests N-1 compatibility between
+control plane and sidecar. Deploys both current and latest
+release, exercises them together. Critical for operators with
+upgrade semantics.
+
+**Binary resource regression** (Dapr) — numpy/scipy-based
+comparison of binary size and virtual memory between PR and
+baseline. Enforces 7MB delta limit on binary growth.
+
+**Downstream consumer testing** (OPA) — checks out downstream
+projects, replaces their dependency via `go mod edit -replace`,
+runs their tests. Catches breaking changes before release.
+
+**k6 performance testing** (Kyverno) — Grafana k6 load testing
+against real KinD cluster with Prometheus. Tests baseline K8s
+vs operator deployed vs operator + policies. Catches perf
+regressions.
+
+**Automated flaky test detection with auto-filed issues** (etcd) —
+scrapes CI run history, detects intermittent failures, auto-
+creates GitHub issues for flaky tests.
+
+**13-provider E2E matrix** (Flagger) — tests progressive delivery
+across 13 service mesh/ingress providers in one workflow.
+
+**OCI Distribution conformance testing** (Harbor) — formal spec
+compliance tests, not just functional e2e.
+
+### Release and Changelog
+
+**Changelog file enforcement** (Contour) — every PR must include
+a file `changelogs/unreleased/PR#-author-category`. Category
+must match PR's release-note label. Produces clean release
+notes automatically.
+
+**Changelog-driven release trigger** (Cluster API) — merging a
+changelog file IS the release trigger. No manual tag pushing.
+Workflow extracts version from filename, creates branch and
+tag.
+
+**Weekly release build smoke test** (Cluster API) — daily fake
+release builds catch tooling regressions continuously rather
+than at release time.
+
+**CVE container rebuild without re-release** (Strimzi) — rebuild
+and re-publish release containers with version suffix when CVEs
+found. Patches base images without new source release.
+
+**Monthly release issue auto-creation** (Envoy Gateway) — reads
+supported versions from config, creates templated release
+tracking issues per active branch on the 1st of every month.
+
+**CRD JSON Schema as release artifact** (Flux) — generates
+OpenAPI JSON schemas from CRDs at release time. Enables IDE
+validation of custom resources.
+
+### Developer Experience
+
+**PR quota manager** (Jaeger) — limits concurrent open PRs per
+contributor based on merge history. New contributors get 1
+slot, scaling up with merges. Prevents review queue flooding.
+
+**Auto-reviewer assignment by file path** (KEDA) — assigns
+reviewers based on which files changed via glob patterns.
+Ensures domain experts see relevant changes.
+
+**Merge conflict label bot** (Kyverno) — auto-labels PRs with
+merge conflicts, removes label when resolved.
+
+**Stale branch cleanup** (Kyverno) — daily cron deletes branches
+with no commits in 7 days, respecting prefix allowlists.
+
+**PR branch auto-updater** (Kyverno) — auto-rebases all open PR
+branches when main is pushed to.
+
+**Workflow auto-approval for returning contributors** (Volcano) —
+auto-approves pending workflow runs for non-first-time
+contributors.
+
+**SSH debug auto-enable on CI re-run** (Rook) — if a test fails
+and you re-run it, SSH access auto-enables. Removes friction
+from failure investigation.
+
+**Sprint lifecycle automation** (Longhorn) — sprint rotation,
+testing item Slack notifications, review reminders via GHA +
+Projects V2 GraphQL.
+
+### Supply Chain
+
+**SLSA Level 3 for binaries AND images** (Flux) — separate
+provenance generation per registry. Gold standard.
+
+**Cosign keyless signing with GitHub OIDC** (MetalLB, Flagger) —
+signs image digests at publish time.
+
+**Dual-location release asset verification** (etcd) — downloads
+release binaries from both GitHub and GCS, checksums must
+match.
+
+**Third-party image mirroring** (Dapr) — monthly mirror of
+external Docker Hub images to project-owned GHCR under
+`3rdparty/` namespace.
+
+**Go dependency submission API** (Telepresence) — submits Go
+dependency graph to GitHub for Dependabot alerts.
+
+### Miscellaneous
+
+**Helm chart diff CI** (Loki) — renders charts with multiple
+value-file scenarios, runs `helm diff` to show exactly what
+K8s resources would change. Posts diff for review.
+
+**Inclusive language linting** (Tekton) — `get-woke/woke-action`
+on changed files.
+
+**Merge conflict marker detection** (Chaos Mesh) — scans for
+unresolved `<<<<<<<` markers in committed files.
+
+**Engine version bump soft-block** (Falco) — detects when source
+changes but version header wasn't bumped. Posts reminder and
+applies `/hold`.
+
+**Dependabot config auto-regeneration** (Tekton) — weekly
+workflow regenerates `.github/dependabot.yml` from config
+template, auto-creates PR if changed.
+
+**Dependabot PR auto-fix** (Cluster API) — when Dependabot opens
+a PR, runs `make generate` and auto-commits updated generated
+code.
+
+## Full Project List (52 surveyed)
+
+1-5: Submariner repos (operator, shipyard, submariner,
+lighthouse, admiral)
+6-10: OVN-Kubernetes, CNO, CNCC, multus-cni, network-tools
+11-17: cluster-ingress-operator, MCO, CKAO, controller-runtime,
+operator-sdk, Cilium, Calico
+18-22: Istio, Gateway API, cert-manager, Crossplane, Argo CD
+23-27: Flux, Kyverno, Prometheus Operator, External Secrets,
+Knative
+28-32: Tekton, Velero, Cluster API, MetalLB, Contour
+33-37: Linkerd, CoreDNS, etcd, KEDA, Rook
+38-42: Thanos, Loki, Jaeger, OPA, Envoy Gateway
+43-47: KubeVirt, Strimzi, Keptn, Falco, Dapr
+48-52: Harbor, Longhorn, Karmada, Volcano, Flagger, Chaos Mesh,
+Telepresence, Emissary-Ingress, KubeEdge
