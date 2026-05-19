@@ -244,7 +244,7 @@ for operator projects.
 
 Submariner-operator has 18 workflow files. Key PR workflows:
 
-- `linting.yml` — 13 linting jobs including bundle validation, CRD
+- `linting.yml` — 15 linting jobs including bundle validation, CRD
   freshness, CodeQL, Anchore, all the text linters
 - `unit.yml` — unit tests with artifact collection
 - `e2e.yml` — default E2E on non-draft PRs
@@ -309,23 +309,29 @@ YAML concept and dry-run validation on PRs are worth adopting.
 ### 6.2 Downstream Release (Konflux 20-Step Workflow)
 
 Submariner's downstream release is a 20-step process orchestrated
-through Claude Code skills and shell scripts:
+through Claude Code skills and shell scripts. Steps 1-7 are setup,
+8-14 are stage release, 15-20 mirror the stage flow for prod:
 
-1. Create upstream release branch
+1. Create upstream release branch (Y-stream only)
 2. Configure Konflux downstream (tenant, RPAs, overlays)
-3. Set up Tekton pipelines per component
+3. Set up Tekton pipelines per component + bundle
 4. Fix Enterprise Contract violations
-5. CVE scanning
+5. CVE scanning + version label updates
 6. Cut upstream release tags
 7. Update bundle image SHAs from Konflux snapshots
-8. Create stage Release CR
+8. Create component stage Release CR
 9. Add release notes from Jira
 10. Apply stage release, verify builds
-11. Update FBC catalog
-12. Create and apply FBC stage releases
-13. Share stage URLs with QE
-14. Repeat steps 8-13 for prod
-15. Share prod URLs
+11. Update FBC catalog with new bundle
+12. Create FBC stage releases (one per OCP version)
+13. Apply FBC stage releases, verify builds
+14. Share stage FBC URLs with QE
+15. Create component prod Release CR
+16. Apply prod release, verify builds
+17. Create FBC prod releases
+18. Apply FBC prod releases, verify builds
+19. Share prod FBC URLs with QE
+20. Update FBC templates with prod URLs
 
 **MCN recommendation**: This process will be needed once MCN ships
 via Konflux. Start by understanding the concepts (Release CRs,
@@ -582,8 +588,9 @@ kubectl plugin distribution via krew index updates.
 
 ## 12. CI Scaffold Plan — Day One Files
 
-Concrete plan for the files to create before any code lands. These
-go into the MCN repo root. 22 files total.
+This section is the concrete implementation of Phase 1 from section
+11. These files go into the MCN repo root before any code lands.
+22 files total.
 
 ### 12.1 File Inventory
 
@@ -632,7 +639,7 @@ MCN-specific path adjustments in `.yamllint.yml` ignore list.
 
 ### 12.3 Linting Workflow — 12 Parallel Jobs
 
-Adapted from Submariner's 14-job `linting.yml`. Uses direct tool
+Adapted from Submariner's 15-job `linting.yml`. Uses direct tool
 invocation instead of Shipyard `make` targets. Go-specific jobs
 guarded with `if: hashFiles('go.mod') != ''` to skip gracefully
 before Go code exists.
