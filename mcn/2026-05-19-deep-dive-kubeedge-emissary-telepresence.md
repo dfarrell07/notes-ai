@@ -153,3 +153,41 @@ even `uv python install`. Among earliest large CNCF projects to
 fully adopt uv over pip/virtualenv.
 
 **MCN**: Use `uv` for any Python tooling in CI (faster than pip).
+
+## KubeEdge — Key Findings
+
+### 15. Doc-Skip Companion Workflows
+
+Files: `.github/workflows/cifuzz-doc.yaml`,
+`fossa-doc.yaml`, `main-doc.yaml`
+
+Paired workflow files with inverted path filters satisfy required
+status checks for doc-only PRs. Simpler than `paths-ignore` when
+you have many required checks.
+
+### 16. Split DaemonSet Pattern for Cloud/Edge Cilium
+
+File: `hack/cilium_e2e_test.sh`
+
+Deploys two Cilium DaemonSets: one for cloud nodes (excluding edge
+via node selector), one for edge nodes pointing at edge API server.
+Label-gated E2E via `cilium-e2e-test` label.
+
+**MCN**: Reference architecture for MCN's potential edge computing
+integration with Cilium.
+
+### 17. SLSA Dual Provenance (Binaries + 12 Container Images)
+
+File: `.github/workflows/release.yml`
+
+Binary provenance combines hashes from 11-output matrix job.
+Container provenance uses dynamic output reference per image.
+
+### 18. UPX Binary Compression for Edge
+
+File: Makefile (`smallbuild` target)
+
+`upx-ucl -9` after static linking produces minimal binaries for
+resource-constrained edge devices.
+
+**MCN**: Consider for MCN agents running on edge nodes.
