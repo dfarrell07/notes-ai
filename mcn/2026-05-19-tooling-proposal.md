@@ -367,6 +367,24 @@ bugs: sometimes reports nothing even when headers are wrong
 with addlicense or SkyWalking Eyes for fixing and multi-language
 coverage. Use YEAR-RANGE regex to avoid new-year breakage.
 
+**Health audit**:
+
+- Stars: ~30. Single maintainer (Denis Tingaikin, Network Service
+  Mesh/CNCF contributor). Burst-style releases: v0.5.0 (Feb 2024),
+  v1.0.0 (Aug 2025).
+- License: GPL-3.0. Fine for dev tooling — not linked into shipped
+  binary. golangci-lint itself is also GPL-3.0.
+- golangci-lint pins go-header at v0.5.0. Insulated from upstream
+  churn. If upstream dies, golangci-lint can fork or deprecate.
+- Coverage: Only tool with native golangci-lint integration for
+  license headers. Unique template/regex/YEAR-RANGE system. Does
+  NOT overlap with addlicense or SkyWalking Eyes (those fix,
+  goheader checks).
+- Known bugs: Most recent false-positive (#5284) fixed Jan 2025.
+  `only-new-issues` interaction (#2470) is a known limitation.
+- Recommendation: goheader for Go enforcement + google/addlicense
+  for bulk insertion and non-Go files.
+
 ### importas
 
 **Current version**: Bundled with golangci-lint since v1.38.0.
