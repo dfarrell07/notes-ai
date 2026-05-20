@@ -176,7 +176,7 @@ of actual Jira descriptions.
 | Jira | Scope | Status | Subtasks Needed? |
 | --- | --- | --- | --- |
 | 7077 | Design proposal (gates everything) | To Do (Yossi) | No |
-| 7080 | Repo scaffolding (dirs, go.mod, LICENSE) | To Do (unassigned) | No |
+| 7080 | Repo scaffolding (dirs, go.mod, LICENSE) | To Do (unassigned) | Yes (3) |
 | 7081 | Makefile + build system | To Do (Daniel) | Yes (5) |
 | 7078 | Container image infra (upstream) | To Do (Daniel) | Yes (4) |
 | 7083 | Prow job configuration | To Do (Prachi) | No |
@@ -296,7 +296,9 @@ This is Phase 3 work. Depends on 7081 (build system) and 7086
 - **7083** — Prow jobs, assigned to Prachi, clear
 - **7084** — downstream CI, clear (thin description but scope
   is obvious)
-- **7087** — upstream CI image builds, clear
+- **7087** — CI image builds. Description mixes upstream (GHA push
+  on merge) and downstream (Prow builds) — may need clarification
+  but not blocking
 
 ### Actions Summary
 
@@ -313,10 +315,12 @@ This is Phase 3 work. Depends on 7081 (build system) and 7086
 
 **Create subtasks** (after descriptions are agreed):
 
-1. 10 subtasks under 7086
-2. 5 subtasks under 7081
-3. 4 subtasks under 7078 and 7089
-4. 3 subtasks under 7079
+1. 10 subtasks under 7086 (pre-merge CI)
+2. 5 subtasks under 7081 (build system)
+3. 4 subtasks under 7089 (upstream release)
+4. 4 subtasks under 7078 (upstream images)
+5. 3 subtasks under 7080 (repo scaffolding)
+6. 3 subtasks under 7079 (downstream images)
 
 **Grooming priority**: 7086 first, then 7089, then 7085, then
 new stories.
