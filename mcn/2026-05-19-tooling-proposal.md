@@ -26,7 +26,7 @@ each category.
 | depguard | Ban deprecated packages | Yes | 1 | GPL-3.0. Stable v2. Use `lax` mode |
 | forbidigo | Ban specific functions | Yes | 2 | Apache-2.0. Active. Function-level banning |
 | promlinter | Prometheus metrics naming | Yes | 2 | Apache-2.0. Stale (1yr). Low noise |
-| exhaustive | Exhaustive switch coverage | Careful | 2 | BSD-2. 18mo release gap. Memory issues |
+| exhaustive | Exhaustive switch coverage | Yes | 2 | BSD-2. Active (Dec 2024). Memory issue was user error |
 | sloglint | Structured logging (slog) | If slog | 2 | MPL-2.0. Skip if using logr+zap |
 | bidichk | Unicode bidi chars | Drop | - | MIT. Redundant with gosec G116 |
 | faillint | Import policy enforcement | Skip | - | BSD-3. depguard+forbidigo covers it |
@@ -49,9 +49,11 @@ backed.
   via golangci-lint's gosec integration)
 - **faillint**: Confirmed skip — depguard + forbidigo fully covers
   its features with golangci-lint integration
-- **exhaustive**: Downgraded from "Yes" to "Careful" — 18-month
-  release gap, memory issues, proto noise. Use
-  `explicit-exhaustive-switch` mode
+- **exhaustive**: Restored to "Yes" — the release gap was
+  overstated (last commit Dec 2024), and the memory issue (#5065)
+  was a user error (Go version mismatch), not a linter bug. Still
+  use `default-signifies-exhaustive: true` and
+  `check-generated: false` for proto noise
 - **KAL**: Adjusted from "enable ALL 28 checks" to "enable
   selectively" based on pre-release stability concerns
 - **sloglint**: Clarified as conditional on logging strategy choice
