@@ -23,8 +23,8 @@ Been researching what CI tooling to use here. So far looking at:
 - Security scanning (govulncheck, CodeQL, OSSF Scorecard,
   Gitleaks, dependency-review-action)
 - Ginkgo/Gomega + envtest unit tests
-- AI-powered non-blocking PR review (security, RBAC, release
-  notes)
+- AI-powered post-merge review automation (security, RBAC,
+  release notes)
 - Dependabot for GHA and Go module updates
 
 Thinking GHA for linting/unit/images, Prow for cloud E2E

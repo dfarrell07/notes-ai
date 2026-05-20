@@ -6,11 +6,45 @@ tags: [jira, subtasks, ci, tooling]
 
 # CORENET-7086 Subtasks — Draft Titles and Descriptions
 
-28 subtasks, one per tool. All blocked on CORENET-7080 (repo
-creation). Parent: CORENET-7086 (Enable pre-merge testing
-automation).
+26 subtasks, one per tool (#18 and #27 dropped). Parent:
+CORENET-7086 (Enable pre-merge testing automation). Assignee:
+dfarrell@redhat.com. Component: MCN (if subtask screen allows).
 
-## 1. Add golangci-lint v2
+### Dropped tools
+
+- **harden-runner (#18)**: Third-party SaaS with kernel-level
+  access to every CI job. Three bypass CVEs in 14 months
+  (DNS-over-TCP gave zero detections). Poor disclosure
+  handling. GitHub's native egress firewall (GA ~Q4 2026) is
+  the better path. Use SHA-pinned actions and explicit
+  permissions instead.
+- **Branch enforcement (#27)**: Use GitHub rulesets, not a GHA
+  workflow. Premature until release branches exist.
+
+### AI review: post-merge, not PR-triggered
+
+Subtasks 23-25 (security, RBAC, release notes) run post-merge
+(on push to main), not on PRs. Reasons:
+
+- **Fork PRs can't access secrets.** Standard open-source
+  contribution model is fork-based PRs. `on: pull_request`
+  blocks secrets from forks, so AI review simply won't run on
+  external contributions. `on: pull_request_target` exposes
+  secrets to fork code — dangerous.
+- **API abuse.** PR-triggered review lets anyone open PRs to
+  burn API credits. No built-in rate limiting in
+  claude-code-action.
+- **Prompt injection.** Anthropic's own docs say the action
+  "is not hardened against prompt injection attacks and should
+  only be used to review trusted PRs." Merged code is trusted.
+- **Post-merge is sufficient.** Security and RBAC findings
+  after merge can be fixed in follow-up PRs. Release notes
+  are inherently post-merge.
+- **Local development.** CLAUDE.md guidance lets developers
+  run the same checks locally via Claude Code before pushing,
+  catching issues before they reach main.
+
+## 1. Add golangci-lint v2 — CREATED (CORENET-7173)
 
 Set up golangci-lint v2 with a strict curated config. Use v2
 config format (`version: "2"`) with `default: none` and explicit
@@ -22,35 +56,36 @@ goimports). Add `.golangci.yml` and a GHA linting workflow job.
 Set up KAL as a golangci-lint module via `.custom-gcl.yml`.
 Enforces K8s API conventions on CRD types (json tags, optional/
 required markers, no bools, no phase, status subresource). Scope
-to `api/` directory. Requires building a custom golangci-lint
-binary in CI before linting.
+to `api/` directory. Requires `golangci-lint custom` to build a binary that
+includes KAL before linting.
 
 ## 3. Add markdownlint-cli2
 
-Add `.markdownlint.yml` config and a GHA workflow job to lint
-markdown files.
+Add `.markdownlint.yml` config (line-length 140 to match Go)
+and a GHA workflow job to lint markdown files.
 
 ## 4. Add yamllint
 
-Add `.yamllint.yml` config and a GHA workflow job to lint YAML
-files. Ignore generated directories and GHA workflow truthy
-values.
+Add `.yamllint.yml` config (line-length 140, truthy ignore
+scoped to `.github/workflows/`) and a GHA workflow job with
+`--strict`. Ignore generated directories.
 
 ## 5. Add shellcheck
 
-Add `.shellcheckrc` config and a GHA workflow job to lint shell
-scripts.
+Add `.shellcheckrc` config and a GHA workflow job to lint
+shell scripts. Use shebang-based auto-discovery and `-x` to
+follow sourced files.
 
 ## 6. Add shfmt
 
-Add a GHA workflow job to verify shell script formatting.
-Configure formatting style (indent width, etc.) via
-`.editorconfig` or flags.
+Add a GHA workflow job to verify shell script formatting
+using `shfmt -d` (diff mode). Configure formatting style
+(indent width, case indent) via `.editorconfig`.
 
 ## 7. Add hadolint
 
 Add a GHA workflow job to lint Dockerfiles for best practices.
-Consider a `.hadolint.yaml` config for rule suppression and
+Add a `.hadolint.yaml` config for rule suppression and
 trusted registries.
 
 ## 8. Add actionlint
@@ -67,22 +102,24 @@ Output SARIF to GitHub Security tab.
 
 ## 10. Add kubeconform
 
-Add a GHA workflow job to validate K8s manifests against schemas.
-Configure schema sources for any custom CRDs. May need a build
-step to render manifests first if using kustomize.
+Add a GHA workflow job to validate K8s manifests (RBAC,
+Deployments, sample CRs) against schemas. Configure schema
+sources for custom CRDs. Include a kustomize render step
+before validation if needed.
 
 ## 11. Add kube-linter
 
 Add a GHA workflow job to check K8s manifests for security and
 best-practice violations (running as root, missing resource
-limits, missing probes, etc.). Consider a `.kube-linter.yml`
+limits, missing probes, etc.). Add a `.kube-linter.yaml`
 config to tune rules for operator manifests.
 
 ## 12. Add lychee
 
 Add lychee for markdown link checking. PR workflow checks
-modified files only. Weekly periodic workflow checks all files
-and auto-creates a GitHub issue if broken links found.
+modified files only. Weekly periodic workflow checks all
+files and opens a GitHub issue on failure via
+`peter-evans/create-issue-from-file`.
 
 ## 13. Add govulncheck
 
@@ -102,7 +139,8 @@ what golangci-lint catches.
 
 Add a weekly workflow running OSSF Scorecard for supply chain
 security assessment. Upload SARIF to GitHub Security tab. Initial
-scores will improve as other CI tools are added.
+scores will improve as branch protection, review policies,
+and security tooling are configured.
 
 ## 16. Add dependency-review-action
 
@@ -115,79 +153,72 @@ diff, not existing dependencies.
 Add a GHA workflow job running Gitleaks for secrets scanning in
 PR diffs. Output SARIF to GitHub Security tab. Add a
 `.gitleaks.toml` config if allowlisting is needed for test
-fixtures.
+fixtures. Evaluate Betterleaks (MIT, drop-in replacement by
+same author) at implementation time.
 
-## 18. Add harden-runner
-
-Add step-security/harden-runner as the first step in all GHA
-workflow jobs for network egress monitoring. Start with audit
-mode. Note: sends telemetry to StepSecurity SaaS backend.
-
-## 19. Add Dependabot
+## 18. Add Dependabot
 
 Add `.github/dependabot.yml` for GitHub Actions (monthly) and
 Go modules (weekly) dependency updates. Group k8s.io and
 sigs.k8s.io dependencies together.
 
-## 20. Add Ginkgo/envtest unit test workflow
+## 19. Add Ginkgo/envtest test workflow
 
-Add a GHA workflow running unit tests with Ginkgo/Gomega and
-envtest for controller integration tests. Includes setup-envtest
-for downloading control plane binaries. Use `-shuffle=on` and
-`-race` flags.
+Add a GHA workflow running unit and integration tests with
+Ginkgo/Gomega and envtest. Includes setup-envtest for
+downloading control plane binaries. Use `--randomize-all`
+and `-race` flags.
 
-## 21. Add Codecov
+## 20. Add Codecov
 
 Add Codecov integration for PR-level coverage reporting with
-line-level comments and coverage diff. Requires CODECOV_TOKEN
-secret. Provides visibility; go-test-coverage provides
-enforcement.
+line-level comments and coverage diff. CODECOV_TOKEN may be
+required depending on org settings (tokenless available for
+public repos with v5+ action). Provides visibility;
+go-test-coverage provides enforcement.
 
-## 22. Add go-test-coverage
+## 21. Add go-test-coverage
 
-Add go-test-coverage for per-package coverage thresholds that
-ratchet up over time. Provides enforcement; Codecov provides
-visibility. Depends on unit test workflow producing coverage
+Add go-test-coverage for per-package coverage thresholds.
+Use its diff feature to prevent coverage regressions vs. the
+base branch. Provides enforcement; Codecov provides
+visibility. Depends on test workflow producing coverage
 output.
 
-## 23. Add lichen dependency license compliance
+## 22. Add go-licenses dependency license compliance
 
-Add a GHA workflow job running lichen against compiled binaries
-to verify all dependencies have approved licenses (Apache-2.0,
-MIT, BSD, ISC, etc.). Same allowlist as Submariner. Requires a
-build step before scanning.
+Add a GHA workflow job running google/go-licenses to verify
+all dependencies have approved licenses (Apache-2.0, MIT,
+BSD, ISC, etc.). Same allowlist approach as Submariner. Scans
+source modules directly — no build step required.
 
-## 24. Add AI security review workflow
+## 23. Add AI security review automation
 
-Add a GHA workflow using anthropics/claude-code-action for
-non-blocking security review on PRs. Checks for privilege
-escalation, secrets handling, security context changes,
-hardcoded credentials. Read-only tools, updates existing comment
-on each push. Requires ANTHROPIC_API_KEY secret. Skip gracefully
-on forks.
+Add a post-merge GHA workflow (on push to main) using
+anthropics/claude-code-action for security review. Checks
+for privilege escalation, secrets handling, security context
+changes, hardcoded credentials. Opens a GitHub issue or
+follow-up PR for findings. Provide CLAUDE.md guidance so
+developers can run the same review locally before pushing.
 
-## 25. Add AI RBAC review workflow
+## 24. Add AI RBAC review automation
 
-Add a GHA workflow using anthropics/claude-code-action for
-detailed RBAC change analysis. Path-filtered to trigger on
-RBAC-related file changes (config/rbac/, kubebuilder RBAC
-markers in Go source). Verifies least-privilege against
-controller source code. Skip gracefully on forks.
+Add a post-merge GHA workflow (on push to main) using
+anthropics/claude-code-action for RBAC analysis. Path-filtered
+to trigger on RBAC-related changes (config/rbac/, *_types.go,
+controller*.go). Verifies least-privilege against controller
+source code. Opens an issue for over-permissive RBAC findings.
 
-## 26. Add AI release notes workflow
+## 25. Add AI release notes automation
 
-Add a GHA workflow using anthropics/claude-code-action to suggest
-release note text when a PR has user-facing changes (API/CRD
-changes, new features, breaking changes). Posts suggested text
-as a PR comment. Skip gracefully on forks.
+Add a post-merge GHA workflow (on push to main) using
+anthropics/claude-code-action to generate release note text
+for user-facing changes (API/CRD changes, new features,
+breaking changes). Opens a PR adding the suggested text to
+the release notes file.
 
-## 27. Add branch enforcement workflow
-
-Add a GHA workflow enforcing that all PRs target main or
-release-* branches.
-
-## 28. Add stale issue/PR workflow
+## 26. Add stale issue/PR workflow
 
 Add a GHA workflow labeling stale issues after 120 days and PRs
-after 14 days. Exempt labels: confirmed, security. Consider
-starting with labeling only (no auto-close) for a new project.
+after 14 days. Auto-close after 7 days with stale label.
+Exempt labels: confirmed, security, good first issue.

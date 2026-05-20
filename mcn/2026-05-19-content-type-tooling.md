@@ -491,7 +491,7 @@ Was 12 jobs, now 18 with new additions:
 8. variant-analysis (CodeQL)
 9. vulnerability-scan (Anchore)
 10. crds (generated code freshness)
-11. licenses (lichen/go-licenses)
+11. licenses (google/go-licenses)
 12. kubeconform (K8s manifest validation)
 13. kube-linter (K8s security checks)
 14. hadolint (Dockerfile linting)

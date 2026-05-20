@@ -72,7 +72,7 @@ backed.
 | kubeconform | K8s manifest schemas | Yes | 1 | Apache-2.0. 3K stars. Replaces kubeval |
 | kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Consider Kubescape too |
 | lychee | Link checking | Yes | 1 | Apache-2.0. 3.6K stars. Rust. Replaces md-link-check |
-| lichen or go-licenses | Dependency license compliance | Yes | 2 | Submariner uses lichen with CNCF allowlist |
+| google/go-licenses | Dependency license compliance | Yes | 2 | 996 stars. Replaces lichen (stagnant). No build step |
 | shfmt | Shell formatting | Yes | 2 | BSD-3. 8.8K stars. mvdan (Go contributor) |
 | checkmake | Makefile linting | Consider | 3 | MIT. 1.2K stars. Small but active |
 | IBM/tekton-lint | Tekton YAML | Skip | - | Apache-2.0. 31 stars. Barely maintained. Use kubeconform |
@@ -105,7 +105,7 @@ backed.
 | GODEBUG flags | tar/zip path traversal prevention | Yes | 1 | Go toolchain (BSD-3). Not a tool, just a flag |
 | Anchore/grype | Container vuln scanning | Yes | 2 | Apache-2.0. 11.5K stars. Faster than Trivy |
 | Gitleaks/Betterleaks | Secrets scanning in PR diffs | Yes | 2 | MIT. 25.8K stars. Betterleaks is successor |
-| harden-runner | GHA network egress control | Yes | 2 | Apache-2.0. StepSecurity (SaaS backend) |
+| harden-runner | GHA network egress control | **No** | — | DROPPED. See audit notes |
 | Cosign | Keyless image/artifact signing | Yes | 3 | Apache-2.0. 5.9K stars. OpenSSF/Sigstore |
 | Syft | SBOM generation (SPDX/CycloneDX) | Yes | 3 | Apache-2.0. 8.4K stars. Multi-ecosystem |
 | SLSA provenance | Build provenance attestations | Yes | 3 | Apache-2.0. OpenSSF. Low stars but backed |
@@ -122,7 +122,7 @@ backed.
   Betterleaks (MIT, by Gitleaks creator, 98.6% recall).
 - **overcover**: Replaced with **go-test-coverage**
   (vladopajic/go-test-coverage, 231 stars, MIT, GHA). Per-package
-  thresholds, regex overrides, base-branch diff ratcheting. 30x
+  thresholds, regex overrides, base-branch diff prevention. 30x
   more popular than overcover.
 - **Trivy**: March 2026 supply chain compromise (malicious v0.69.4,
   fake binaries on Docker Hub). DB updates suspended temporarily.
@@ -132,8 +132,15 @@ backed.
   for multi-language or container scanning.
 - **SHA-pinned actions check**: Partially redundant with Scorecard's
   Pinned-Dependencies check. Faster for CI gating. Keep both.
-- **harden-runner**: SaaS backend phones home to StepSecurity.
-  Some orgs may object. Community tier free for GitHub-hosted only.
+- **harden-runner**: **DROPPED.** Third-party SaaS with
+  kernel-level access to every CI job. Three bypass CVEs in 14
+  months (DNS-over-TCP gave zero detections). Poor disclosure
+  handling — went silent on researcher, fixed only after public
+  disclosure. Global Block List lets StepSecurity push changes
+  to your pipelines without consent. GitHub's native egress
+  firewall (GA ~Q4 2026) provides the same capability at the
+  infrastructure level without the trust paradox. Use SHA-pinned
+  actions and explicit workflow permissions instead.
 - **Grype vs Trivy**: High overlap on container vulns. Different
   databases catch different things. Running both is intentional
   defense in depth. Grype is faster; Trivy is broader (IaC,
@@ -149,14 +156,14 @@ not standalone packages).
 | --- | --- | --- | --- |
 | Ginkgo/Gomega | BDD test framework + matchers | Yes | 1 |
 | envtest | Local API server for controller tests | Yes | 1 |
-| `-shuffle=on` test flag | Catch ordering-dependent tests | Yes | 1 |
+| `--randomize-all` Ginkgo flag | Catch ordering-dependent tests | Yes | 1 |
 | `go mod tidy -diff` | Clean go.mod drift check (Go 1.26+) | Yes | 1 |
 | KIND clusters | E2E test infrastructure | Yes | 2 |
 | Codecov | Coverage reporting with PR comments | Yes | 2 |
 | Go native fuzzing | Webhook validation fuzz tests | Yes | 2 |
 | go-ordered-test | Test isolation detector (weekly) | Yes | 2 |
 | go-stress-test | Flaky test detector (nightly) | Yes | 2 |
-| go-test-coverage | Coverage ratchet (per-package) | Yes | 2 |
+| go-test-coverage | Coverage regression prevention (per-package) | Yes | 2 |
 | upgrade E2E | N-1 to N version upgrade testing | Yes | 3 |
 | system validation | Deployment correctness script | Yes | 3 |
 | go-test-split-action | Integration test parallelization | Consider | 3 |
@@ -201,7 +208,7 @@ All Apache-2.0 or MIT licensed. ko (8.3K stars) is well-established.
 
 All MIT or Apache-2.0. No Conventional Commits — prefer
 human-readable commit messages. Release notes are human-written
-with AI suggestions via PR review agent.
+with AI suggestions via post-merge automation.
 
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
@@ -243,18 +250,19 @@ with AI suggestions via PR review agent.
 | Inclusive language linting | woke on changed files | Consider | 2 |
 | echo.% Makefile introspection | Debug Make variables | Yes | 1 |
 
-## 10. AI-Powered PR Review (GitHub Actions)
+## 10. AI-Powered Review Automation (GitHub Actions)
 
 | Workflow | What It Reviews | Adopt? | Phase |
 | --- | --- | --- | --- |
-| ai-security-review | RBAC, privilege escalation, secrets | Yes | 1 |
+| ai-security-review | Privilege escalation, secrets, security contexts | Yes | 1 |
 | ai-rbac-review | Detailed RBAC change analysis | Yes | 1 |
-| ai-release-notes | Suggest release notes for PRs | Yes | 1 |
+| ai-release-notes | Generate release note text | Yes | 1 |
 
 All use `anthropics/claude-code-action@v1` with
-`ANTHROPIC_API_KEY` secret. Non-blocking (informational PR
-comments only). `use_sticky_comment: true` to avoid spam.
-Read-only tools only.
+`ANTHROPIC_API_KEY` secret. **Post-merge** (on push to main),
+not PR-triggered — avoids fork secret exposure and API abuse.
+Opens issues or follow-up PRs for findings. Developers run
+the same checks locally via Claude Code + CLAUDE.md guidance.
 
 ## Key Architectural Decisions
 
@@ -263,9 +271,9 @@ Read-only tools only.
    UBI9 for Red Hat builds.
 
 2. **Human-readable commits + AI-suggested release notes** — no
-   Conventional Commits. AI PR review agent suggests release note
-   text when warranted. Author adds to in-repo release notes file.
-   Similar to Submariner's approach but without separate website.
+   Conventional Commits. Post-merge AI automation suggests release
+   note text and opens a PR. Similar to Submariner's approach but
+   without separate website.
 
 3. **KAL with selective checks** — MCN starts fresh but KAL is
    pre-release. Enable jsontags, optionalorrequired, requiredfields,
@@ -287,8 +295,17 @@ Read-only tools only.
 8. **OSSF Scorecard from day one** — single workflow, instant
    security visibility and public badge.
 
-9. **Three AI review workflows** — security, RBAC, release notes.
-    Non-blocking, confidence-scored, read-only tools.
+9. **Three AI review automations (post-merge)** — security,
+    RBAC, release notes. Triggered on push to main, not on PRs.
+    PR-triggered AI review is incompatible with fork-based
+    contributions: `on: pull_request` blocks secrets from forks
+    so the review won't run; `on: pull_request_target` exposes
+    secrets to untrusted code. Post-merge also avoids API credit
+    abuse (anyone can open PRs) and prompt injection in PR diffs
+    (Anthropic's docs say claude-code-action "is not hardened
+    against prompt injection"). Findings open issues or follow-up
+    PRs. Developers run the same checks locally via Claude Code
+    + CLAUDE.md guidance before pushing.
 
 ## Adoption Phases
 

@@ -233,21 +233,21 @@ of actual Jira descriptions.
    .yamllint.yml, .shellcheckrc, .grype.yaml, staticcheck.conf)
 2. GHA linting workflow (18+ parallel jobs)
 3. GHA unit test workflow
-4. GHA branch enforcement + stale management
+4. GHA stale management (branch enforcement via rulesets)
 5. GHA periodic checks (weekly link check)
-6. AI review workflows (security, RBAC, release notes)
+6. AI review automations (post-merge security, RBAC, release notes)
 7. KAL integration (.custom-gcl.yml + .golangci-kal.yml)
 8. Security scanning (govulncheck, CodeQL, Scorecard, zizmor,
-   dependency-review, Gitleaks, harden-runner)
+   dependency-review, Gitleaks)
 9. Dependabot config
 10. CRD validation CI (codegen diff, crdify, go-apidiff)
-11. Dependency license compliance (lichen or go-licenses with
-    CNCF-approved allowlist — same as Submariner)
+11. Dependency license compliance (google/go-licenses with
+    CNCF-approved allowlist — same approach as Submariner)
 
 #### CORENET-7089 subtasks (upstream release)
 
 1. Release notes file in repo (human-written, AI-suggested via
-   PR review agent — no Conventional Commits needed)
+   post-merge AI automation — no Conventional Commits needed)
 2. Version tagging and GitHub Release creation
 3. Backport automation (korthout/backport-action)
 4. Dependabot config (GHA monthly, Go modules weekly)
