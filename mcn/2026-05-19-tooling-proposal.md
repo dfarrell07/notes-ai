@@ -103,7 +103,7 @@ backed.
 | dependency-review-action | Block PRs with vuln deps | Yes | 1 | MIT. GitHub official |
 | GODEBUG flags | tar/zip path traversal prevention | Yes | 1 | Go toolchain (BSD-3). Not a tool, just a flag |
 | Anchore/grype | Container vuln scanning | Yes | 2 | Apache-2.0. 11.5K stars. Faster than Trivy |
-| TruffleHog | Verified secrets scanning | Yes | 2 | **AGPL-3.0**. Fine as standalone CI tool only |
+| Gitleaks | Secrets scanning in PR diffs | Yes | 2 | MIT. 25.8K stars. Replaces TruffleHog (AGPL) |
 | harden-runner | GHA network egress control | Yes | 2 | Apache-2.0. StepSecurity (SaaS backend) |
 | Cosign | Keyless image/artifact signing | Yes | 3 | Apache-2.0. 5.9K stars. OpenSSF/Sigstore |
 | Syft | SBOM generation (SPDX/CycloneDX) | Yes | 3 | Apache-2.0. 8.4K stars. Multi-ecosystem |
@@ -113,8 +113,16 @@ backed.
 
 **Audit notes**:
 
-- **TruffleHog**: AGPL-3.0 — safe as standalone CI scanner but
-  cannot be imported as a library. Alternative: Gitleaks (MIT).
+- **TruffleHog**: Replaced with **Gitleaks** (MIT, 25.8K stars).
+  TruffleHog's AGPL-3.0 is avoidable. Gitleaks covers git repos
+  with 150+ regex rules, SARIF output, millisecond pre-commit
+  scanning. No live credential verification (TruffleHog's unique
+  feature), but that's rarely needed in CI. Newer option:
+  Betterleaks (MIT, by Gitleaks creator, 98.6% recall).
+- **overcover**: Replaced with **go-test-coverage**
+  (vladopajic/go-test-coverage, 231 stars, MIT, GHA). Per-package
+  thresholds, regex overrides, base-branch diff ratcheting. 30x
+  more popular than overcover.
 - **Trivy**: March 2026 supply chain compromise (malicious v0.69.4,
   fake binaries on Docker Hub). DB updates suspended temporarily.
   Running Grype alongside provides defense in depth.
@@ -147,7 +155,7 @@ from monorepo, not standalone packages).
 | Go native fuzzing | Webhook validation fuzz tests | Yes | 2 |
 | go-ordered-test | Test isolation detector (weekly) | Yes | 2 |
 | go-stress-test | Flaky test detector (nightly) | Yes | 2 |
-| overcover | Coverage ratchet (only goes up) | Yes | 2 |
+| go-test-coverage | Coverage ratchet (per-package) | Yes | 2 |
 | upgrade E2E | N-1 to N version upgrade testing | Yes | 3 |
 | system validation | Deployment correctness script | Yes | 3 |
 | go-test-split-action | Integration test parallelization | Consider | 3 |
