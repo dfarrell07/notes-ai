@@ -321,6 +321,32 @@ selectively: jsontags, optionalorrequired, requiredfields, defaults,
 statussubresource, nobools first. Skip nonpointerstructs for CRDs.
 Accept pre-release risk — backed by kubernetes-sigs.
 
+**Health audit**:
+
+- Stars: 136. Contributors: 25. Commits: ~388. Created Dec 2024.
+  Active: weekly merges, last push May 18, 2026.
+- Governance: Official SIG API Machinery subproject. OWNERS:
+  JoelSpeed (Red Hat), jpbetz (Google, SIG lead), sivchari,
+  everettraven. Biweekly dedicated meeting.
+- License: Apache-2.0. Fully compatible with Apache-2.0 projects.
+  No license concerns whatsoever.
+- Security: Pure static analysis (go/analysis AST inspection). No
+  CVEs. Does not execute analyzed code, no network calls. Falls
+  under standard Kubernetes security disclosure process.
+- Coverage: 31 rules, ALL unique. Zero overlap with any built-in
+  golangci-lint linter. Fills gap that nothing else provides.
+- Maturity: Pre-release. ZERO tagged releases. No semver, no
+  changelog. Any pseudo-version bump could contain breaking
+  changes. Pin explicitly and test after updates.
+- Adoption: ~20 repos including cluster-api, openshift/api,
+  openshift/hypershift, cert-manager/trust-manager, Kong,
+  metal3-io, kgateway.
+- Custom binary risk: golangci-lint custom builds are NOT
+  reproducible (issue #5961). Cache by config hash + Go version.
+  Build in constrained CI step (no secrets). Larger attack
+  surface than standard golangci-lint. Mitigate by pinning both
+  golangci-lint version and KAL pseudo-version.
+
 ### goheader
 
 **Current version**: Bundled with golangci-lint (upstream:
