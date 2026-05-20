@@ -13,23 +13,23 @@ each category.
 
 ## 1. Go Source Linting
 
-| Tool | What It Does | Adopt? | Phase |
-| --- | --- | --- | --- |
-| golangci-lint v2 | 60+ linters, v2 config format | Yes | 1 |
-| kube-api-linter (KAL) | CRD API convention enforcement | Yes | 1 |
-| goheader | Apache-2.0 license header enforcement | Yes | 1 |
-| importas | Enforce K8s import aliases (corev1 etc.) | Yes | 1 |
-| modernize | Suggest modern Go idioms | Yes | 1 |
-| funcorder | Constructor/method ordering | Yes | 1 |
-| recvcheck | Consistent pointer/value receivers | Yes | 1 |
-| iface | Detect incorrect interface use | Yes | 1 |
-| depguard/gomodguard | Ban deprecated packages | Yes | 1 |
-| sloglint | Structured logging conventions | Yes | 2 |
-| promlinter | Prometheus metrics naming | Yes | 2 |
-| exhaustive | Exhaustive switch coverage | Yes | 2 |
-| bidichk | Unicode bidi control chars (supply chain) | Yes | 2 |
-| faillint | Import policy enforcement (stronger) | Consider | 2 |
-| forbidigo | Ban specific functions/calls | Yes | 2 |
+| Tool | What It Does | Adopt? | Phase | Audit Notes |
+| --- | --- | --- | --- | --- |
+| golangci-lint v2 | 60+ linters, v2 config | Yes | 1 | GPL-3.0 (fine for tooling). Bus factor: 1 |
+| kube-api-linter (KAL) | CRD API conventions | Yes | 1 | Apache-2.0. Pre-release (no tags). SIG API Mach |
+| goheader | License header enforcement | Yes | 1 | GPL-3.0. Pair with addlicense for fixing |
+| importas | K8s import alias enforcement | Yes | 1 | Apache-2.0. Non-determinism fixed in v0.2.0 |
+| modernize | Modern Go idioms | Yes | 1 | BSD-3. Official Go team. Known edge cases |
+| funcorder | Constructor/method ordering | Yes | 1 | Apache-2.0. New, low adoption. Defaults only |
+| recvcheck | Receiver consistency | Yes | 1 | MIT. High value, configure K8s exclusions |
+| iface | Interface pollution detection | Yes | 1 | Apache-2.0. `identical` only for operators |
+| depguard | Ban deprecated packages | Yes | 1 | GPL-3.0. Stable v2. Use `lax` mode |
+| forbidigo | Ban specific functions | Yes | 2 | Apache-2.0. Active. Function-level banning |
+| promlinter | Prometheus metrics naming | Yes | 2 | Apache-2.0. Stale (1yr). Low noise |
+| exhaustive | Exhaustive switch coverage | Careful | 2 | BSD-2. 18mo release gap. Memory issues |
+| sloglint | Structured logging (slog) | If slog | 2 | MPL-2.0. Skip if using logr+zap |
+| bidichk | Unicode bidi chars | Drop | - | MIT. Redundant with gosec G116 |
+| faillint | Import policy enforcement | Skip | - | BSD-3. depguard+forbidigo covers it |
 
 **Config approach**: Start from Submariner's 248-line config.
 Change goheader to "MCN project". Remove Submariner-specific
@@ -38,8 +38,23 @@ explicit enable list (not `default: all`). Separate `formatters`
 section with `gci`, `gofmt`, `gofumpt`, `goimports`.
 
 **KAL config**: Build custom golangci-lint binary via
-`.custom-gcl.yml`. Enable ALL 28 checks (MCN starts fresh — no
-GA API constraints like Gateway API). Scope to `api/` directory.
+`.custom-gcl.yml`. Enable selectively (jsontags, optionalorrequired,
+requiredfields, defaults, statussubresource, nobools first). Scope
+to `api/` directory. Accept pre-release risk — SIG API Machinery
+backed.
+
+**Changes from initial proposal (post-audit)**:
+
+- **bidichk**: Dropped — redundant with gosec G116 (already enabled
+  via golangci-lint's gosec integration)
+- **faillint**: Confirmed skip — depguard + forbidigo fully covers
+  its features with golangci-lint integration
+- **exhaustive**: Downgraded from "Yes" to "Careful" — 18-month
+  release gap, memory issues, proto noise. Use
+  `explicit-exhaustive-switch` mode
+- **KAL**: Adjusted from "enable ALL 28 checks" to "enable
+  selectively" based on pre-release stability concerns
+- **sloglint**: Clarified as conditional on logging strategy choice
 
 ## 2. Non-Go Linting
 
