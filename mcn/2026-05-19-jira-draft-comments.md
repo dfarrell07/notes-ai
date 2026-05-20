@@ -14,8 +14,7 @@ blocked on earlier work anyway.
 
 ---
 
-Researched CI patterns across ~50 K8s projects. Planning to set
-up GHA workflows covering:
+Planning to set up GHA workflows covering:
 
 - golangci-lint v2 (strict config, plus KAL for CRD conventions)
 - Standard non-Go linting (markdownlint, yamllint, shellcheck,
@@ -26,6 +25,7 @@ up GHA workflows covering:
 - Ginkgo/Gomega + envtest unit tests
 - AI-powered non-blocking PR review (security, RBAC, release
   notes)
+- Dependabot for GHA and Go module updates
 
 GHA for linting/unit/images, Prow for cloud E2E (CORENET-7083).
 
