@@ -56,23 +56,36 @@ backed.
   selectively" based on pre-release stability concerns
 - **sloglint**: Clarified as conditional on logging strategy choice
 
-## 2. Non-Go Linting (health audits pending)
+## 2. Non-Go Linting
 
-| Tool | Content Type | Adopt? | Phase |
-| --- | --- | --- | --- |
-| markdownlint-cli2 | Markdown | Yes | 1 |
-| yamllint | YAML | Yes | 1 |
-| shellcheck | Shell scripts | Yes | 1 |
-| hadolint | Dockerfiles | Yes | 1 |
-| actionlint | GitHub Actions workflows | Yes | 1 |
-| zizmor | GitHub Actions security | Yes | 1 |
-| gitlint | Commit messages | Yes | 1 |
-| kubeconform | K8s manifest validation | Yes | 1 |
-| kube-linter | K8s manifest security (40+ checks) | Yes | 1 |
-| lychee | Markdown link checking | Yes | 1 |
-| shfmt | Shell script formatting | Yes | 2 |
-| checkmake | Makefile linting | Consider | 3 |
-| IBM/tekton-lint | Tekton pipeline YAML | Consider | 4 |
+| Tool | Content Type | Adopt? | Phase | Audit Notes |
+| --- | --- | --- | --- | --- |
+| markdownlint-cli2 | Markdown | Yes | 1 | MIT. 629 stars. David Anson (Microsoft). Node.js |
+| yamllint | YAML | Yes | 1 | GPL-3.0. 3.3K stars. Python. Standard |
+| shellcheck | Shell scripts | Yes | 1 | GPL-3.0. 37K+ stars. Undisputed. Haskell binary |
+| hadolint | Dockerfiles | Yes | 1 | GPL-3.0. 12K stars. Integrates ShellCheck |
+| actionlint | GHA correctness | Yes | 1 | MIT. 3.5K stars. Go binary. Pair with zizmor |
+| zizmor | GHA security | Yes | 1 | MIT. 5K stars. Rust. 24 security rules |
+| gitlint | Commit messages | Careful | 1 | MIT. 930 stars. 2yr release gap. Seeking co-maint |
+| kubeconform | K8s manifest schemas | Yes | 1 | Apache-2.0. 3K stars. Replaces kubeval |
+| kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Red Hat/StackRox |
+| lychee | Link checking | Yes | 1 | Apache-2.0. 3.6K stars. Rust. Replaces md-link-check |
+| shfmt | Shell formatting | Yes | 2 | BSD-3. 8.8K stars. mvdan (Go contributor) |
+| checkmake | Makefile linting | Consider | 3 | MIT. 1.2K stars. Small but active |
+| IBM/tekton-lint | Tekton YAML | Skip | - | Apache-2.0. 31 stars. Barely maintained. Use kubeconform |
+
+**Changes from initial proposal (post-audit)**:
+
+- **gitlint**: Downgraded from "Yes" to "Careful" — 2+ year
+  release gap, maintainer seeking co-maintainers (issue #134).
+  Alternative: commitlint (JS, 17K stars, active). Or use
+  release-please's Conventional Commit enforcement instead.
+- **IBM/tekton-lint**: Downgraded from "Consider" to "Skip" — 31
+  stars, 2+ year stale, lost original maintainer. Use kubeconform
+  with Tekton CRD schemas for structural validation instead.
+- **actionlint + zizmor**: Confirmed complementary, not competing.
+  actionlint for correctness (syntax, types, shell), zizmor for
+  security (injection, permissions, unpinned actions). Run both.
 
 ## 3. Security Scanning
 
