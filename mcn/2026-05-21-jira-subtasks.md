@@ -12,14 +12,14 @@ automation).
 
 ## 1. Add golangci-lint v2
 
-Set up golangci-lint v2 with a strict config enabling 60+
-linters. Use v2 config format with `default: none` and explicit
+Set up golangci-lint v2 with a strict curated config. Use v2
+config format (`version: "2"`) with `default: none` and explicit
 enable list. Configure formatters separately (gci, gofumpt,
 goimports). Add `.golangci.yml` and a GHA linting workflow job.
 
 ## 2. Add kube-api-linter (KAL)
 
-Set up KAL as a custom golangci-lint plugin via `.custom-gcl.yml`.
+Set up KAL as a golangci-lint module via `.custom-gcl.yml`.
 Enforces K8s API conventions on CRD types (json tags, optional/
 required markers, no bools, no phase, status subresource). Scope
 to `api/` directory. Requires building a custom golangci-lint
