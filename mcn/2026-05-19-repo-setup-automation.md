@@ -163,236 +163,163 @@ Of these, 7085 and 7089 have no description and need grooming.
 8. CORENET-7089 (release automation) can be developed alongside once
    repos exist
 
-## Jira Planning — Mapping Tooling Proposal to Stories
+## Jira Planning — Complete Structure
 
-Based on the consolidated tooling proposal
-(`mcn/2026-05-19-tooling-proposal.md`), here is what needs to happen
-on Jira. No changes yet — this is the plan.
+Comprehensive view of all stories, their scope, proposed
+subtasks, and gaps. Based on the tooling proposal and review
+of actual Jira descriptions.
 
-### Stories That Need Updated Descriptions
+### Existing Stories — Scope Clarification
 
-These stories exist but have vague or missing descriptions. They
-should be updated with specific tooling from the proposal.
+#### Upstream
 
-#### CORENET-7086 — Enable pre-merge testing automation
+| Jira | Scope | Status | Subtasks Needed? |
+| --- | --- | --- | --- |
+| 7077 | Design proposal (gates everything) | To Do (Yossi) | No |
+| 7080 | Repo scaffolding (dirs, go.mod, LICENSE) | To Do (unassigned) | No |
+| 7081 | Makefile + build system | To Do (Daniel) | Yes (5) |
+| 7078 | Container image infra (upstream) | To Do (Daniel) | Yes (4) |
+| 7083 | Prow job configuration | To Do (Prachi) | No |
+| 7086 | Pre-merge testing / GHA CI | To Do (Daniel) | Yes (10) |
+| 7087 | CI container image builds + push | To Do (Daniel) | No |
+| 7089 | Upstream release process | To Do (Daniel) | Yes (4) |
 
-Current description mentions golangci-lint, gofmt, license headers,
-API compat checks. Update to include the full Phase 1 linting stack:
+#### Downstream (under CORENET-7067)
 
-- golangci-lint v2 with KAL plugin (15 linters, see proposal
-  section 1)
-- markdownlint-cli2, yamllint, shellcheck, hadolint, actionlint,
-  zizmor (see proposal section 2)
-- kubeconform + kube-linter for K8s manifest validation
-- govulncheck, CodeQL, OSSF Scorecard, dependency-review-action
-  (see proposal section 3)
-- Ginkgo/Gomega + envtest for unit/integration tests
-- `-shuffle=on`, `go mod tidy -diff` test flags
-- Three AI review workflows (security, RBAC, release notes)
-- conform (or PR title check) for commit message linting
-- lychee for link checking
+| Jira | Scope | Status | Subtasks Needed? |
+| --- | --- | --- | --- |
+| 7082 | Create openshift/mcn, sync from upstream | To Do (Daniel) | No |
+| 7079 | Konflux build infra (Dockerfiles, Tekton) | To Do (Daniel) | Yes (3) |
+| 7084 | Downstream CI (Prow on downstream builds) | To Do (Daniel) | No |
+| 7085 | Run upstream tests on downstream builds | To Do (Daniel) | No |
+| ACM-25779 | Konflux-build-catalog onboarding | New (Daniel) | No |
 
-This is a large story. Consider creating subtasks (see below).
+#### Other
 
-#### CORENET-7085 — Enable upstream tests in downstream CI
+| Jira | Scope | Status | Notes |
+| --- | --- | --- | --- |
+| 7090 | CNO integration | To Do (unassigned) | Needs grooming |
+| 7156 | Website | To Do (unassigned) | Later |
+| 7157 | Documentation | To Do (unassigned) | Later |
+| 7155 | Kube bump automation agents | To Do (Daniel) | Different epic |
+| 7041 | Agentic AI workflows | To Do (Vishal) | Different epic |
 
-No description. Should cover:
+### Proposed Subtasks
 
-- Running upstream unit tests in downstream Prow jobs
-- Running upstream E2E tests on downstream builds
-- Coverage reporting to Codecov
-- go-test-coverage ratcheting
+#### CORENET-7080 subtasks (repo scaffolding)
 
-#### CORENET-7089 — Release automation and versioning
+1. Governance files (LICENSE, README, CONTRIBUTING, CODEOWNERS)
+2. PR template + issue templates
+3. .gitignore, .gitattributes
 
-No description. Should cover:
+#### CORENET-7081 subtasks (build system)
 
-- Conventional Commits enforcement (conform or PR title check)
-- release-please (GitHub Action, not App) for versioning
-- Per-PR changelog files (Contour pattern) with CI enforcement
-- GoReleaser for binary builds (if MCN ships a CLI)
-- GoReleaser dry-run on config changes
-- Dependabot for GHA monthly + Go modules weekly
-- Dependabot auto-fix (regenerate code on dep updates)
-- Backport action (korthout/backport-action) for release branches
-- Release artifact verification (diff release vs source)
-- Fake release smoke test (daily `v9.9.9-fake` build)
-- Cosign keyless signing for images
-- Syft SBOM generation
-- SLSA provenance attestations
+1. Makefile with standard targets
+2. `.github/env` for tool version pinning
+3. CLAUDE.md + AGENTS.md
+4. Lefthook pre-commit config
+5. SECURITY-INSIGHTS.yml
 
-#### CORENET-7090 — CNO Integration
+#### CORENET-7078 subtasks (upstream images)
 
-No description. Not directly related to tooling but may need CI
-jobs for integration testing with CNO.
+1. ko configuration (`.ko.yaml`)
+2. Upstream Dockerfile (multi-stage, for downstream reference)
+3. GHA image push workflow (push on merge to main)
+4. Multi-arch config (amd64 + arm64)
 
-### Stories That Need Subtasks
+#### CORENET-7086 subtasks (pre-merge CI)
 
-**CORENET-7086** is too large for a single story. Recommended
-subtasks:
+1. Linting config files (.golangci.yml, .markdownlint.yml,
+   .yamllint.yml, .shellcheckrc, .grype.yaml, staticcheck.conf)
+2. GHA linting workflow (18+ parallel jobs)
+3. GHA unit test workflow
+4. GHA branch enforcement + stale management
+5. GHA periodic checks (weekly link check)
+6. AI review workflows (security, RBAC, release notes)
+7. KAL integration (.custom-gcl.yml + .golangci-kal.yml)
+8. Security scanning (govulncheck, CodeQL, Scorecard, zizmor,
+   dependency-review, Gitleaks, harden-runner)
+9. Dependabot config
+10. CRD validation CI (codegen diff, crdify, go-apidiff)
 
-1. **Linting configs** — create all config files (.golangci.yml,
-   .markdownlint.yml, .yamllint.yml, .shellcheckrc, .gitlint,
-   .grype.yaml, .markdownlinkcheck.json, staticcheck.conf)
-2. **GHA linting workflow** — create `.github/workflows/linting.yml`
-   with 18+ parallel jobs
-3. **GHA unit test workflow** — create `.github/workflows/unit.yml`
-4. **GHA branch enforcement** — create `.github/workflows/branch.yml`
-5. **GHA stale management** — create `.github/workflows/stale.yml`
-6. **GHA periodic checks** — create `.github/workflows/periodic.yml`
-7. **AI review workflows** — create 3 AI review workflow files
-8. **KAL integration** — set up `.custom-gcl.yml` and KAL config
-9. **Security scanning workflows** — govulncheck, CodeQL, Scorecard,
-   zizmor, dependency-review, Gitleaks, harden-runner
-10. **Dependabot config** — create `.github/dependabot.yml`
+#### CORENET-7089 subtasks (upstream release)
 
-**CORENET-7081** subtasks:
+1. Conventional Commits enforcement (conform or PR title check)
+2. release-please workflow (GitHub Action)
+3. Per-PR changelog system (Contour pattern, CI enforced)
+4. Backport automation (korthout/backport-action)
 
-1. **Makefile** — create standalone Makefile with standard targets
-   (build, test, lint, images, manifests, generate, clean, help)
-2. **`.github/env`** — centralized tool version pinning
-3. **CLAUDE.md + AGENTS.md** — AI agent instructions
-4. **Lefthook config** — pre-commit hooks (lefthook.yml)
-5. **SECURITY-INSIGHTS.yml** — OpenSSF security metadata
+#### CORENET-7079 subtasks (downstream images)
 
-**CORENET-7078** subtasks:
+1. Konflux Dockerfiles (UBI9, FIPS, multi-arch)
+2. Tekton pipeline configs (.tekton/)
+3. RPM lockfiles (if needed)
 
-1. **ko configuration** — `.ko.yaml` for upstream image builds
-2. **Upstream Dockerfile** — multi-stage for downstream/Konflux
-3. **Image push workflow** — `.github/workflows/release.yml`
-4. **Multi-arch build config** — amd64 + arm64 at minimum
+### New Stories to Create
 
-**CORENET-7089** subtasks:
+#### NEW: Downstream/Konflux release pipeline
 
-1. **Conventional Commits setup** — conform config or PR title check
-2. **release-please workflow** — automated versioning
-3. **Per-PR changelog system** — CI enforcement + release assembly
-4. **Supply chain security** — Cosign + Syft + SLSA in release
-5. **Backport automation** — label-driven cherry-pick
+Parent: CORENET-7067. Covers the full Konflux release process
+that has no existing story:
 
-### New Stories to Propose
-
-These are capabilities from the proposal that don't map cleanly
-to any existing Jira story:
-
-1. **Governance files** — LICENSE, README, CONTRIBUTING, CODEOWNERS,
-   .gitignore, .gitattributes, PR template, issue templates. Could
-   be a subtask of CORENET-7080 or a new story.
-
-2. **CRD validation CI** — crdify for breaking changes, go-apidiff
-   for Go API compat, CEL validation matrix, CRD drift verification.
-   Could be subtask of CORENET-7086 or a new story.
-
-3. **E2E test framework** — KIND cluster setup, Ginkgo E2E suite,
-   upgrade E2E, system validation script. Probably needs its own
-   story (separate from CORENET-7086 which is pre-merge testing).
-
-4. **Developer experience** — devcontainer.json, Lefthook setup,
-   echo.% Makefile introspection. Could be subtask of CORENET-7081.
-
-5. **CI workflow patterns** — dorny/paths-filter, draft-aware matrix,
-   workflow failure issue tracker, workflow telemetry, composite
-   result pattern, write-on-merge cache. These are improvements to
-   the CI workflows, not separate stories. Add as acceptance criteria
-   to CORENET-7086.
-
-### Stories That Are Ready As-Is
-
-These stories have adequate descriptions that align with the
-tooling proposal:
-
-- **CORENET-7078** — container image infra (upstream). Aligns with
-  proposal section 6 (ko, multi-arch). May need subtasks but
-  description is sufficient.
-- **CORENET-7081** — Makefiles and build system. Aligns with
-  proposal. May need subtasks.
-- **CORENET-7082** — downstream repo setup. Process-focused, not
-  tooling-heavy.
-- **CORENET-7083** — Prow jobs. Assigned to Prachi. Aligns with
-  proposal section 8 (GHA + Prow split).
-- **CORENET-7084** — downstream CI. Process-focused.
-
-### Grooming Priority
-
-1. **CORENET-7086** — highest priority. This is the "CI that
-   validates all contributions" story. Needs the most detailed
-   description and subtasks from the tooling proposal.
-2. **CORENET-7089** — second priority. Release automation needs
-   detailed acceptance criteria from the proposal.
-3. **CORENET-7085** — third. Needs any description at all.
-4. **CORENET-7090** — lower. CNO integration is blocked on other
-   work anyway.
-
-### Jira Structure Analysis — Gaps and Proposed Changes
-
-Reviewed all downstream/Konflux stories against the tooling
-proposal. The current structure has gaps.
-
-#### What exists for downstream/Konflux
-
-| Jira | Covers | Actual Konflux scope |
-| --- | --- | --- |
-| CORENET-7079 | Container image infra (downstream) | Konflux Dockerfiles, Tekton pipelines, registry |
-| CORENET-7082 | Initial downstream repo setup | Create openshift/mcn, sync from upstream |
-| CORENET-7084 | Downstream CI to deploy MCN | Prow CI on downstream builds |
-| CORENET-7085 | Upstream tests in downstream CI | Run upstream tests on downstream builds |
-| CORENET-7087 | Container image builds in CI | Upstream CI image builds + push |
-| CORENET-7089 | Release automation and versioning | Ambiguous — upstream or downstream? |
-| ACM-25779 | Konflux-build-catalog onboarding | Specifically Konflux catalog |
-
-#### What's missing
-
-The full downstream release pipeline has no dedicated story:
-
-- Konflux tenant configuration (konflux-release-data)
+- Konflux tenant configuration (konflux-release-data overlays)
 - ReleasePlanAdmission setup
 - Enterprise Contract policy
 - Stage release workflow (Release CRs, snapshots)
 - Prod release workflow
 - FBC catalog setup and management
-- Image signing (Cosign) and SBOM (Syft) at release time
-- SLSA provenance attestations
-- RPM lockfiles (if needed)
 - OLM bundle generation and validation
+- Image signing (Cosign keyless) at release time
+- SBOM generation (Syft) and attestation
+- SLSA provenance per image
 
-These are Phase 4 items from the tooling proposal. They're
-substantial — Submariner's equivalent is a 20-step process with
-15 dedicated Claude Code skills.
+This is Phase 4 work. Depends on 7079 (build infra exists) and
+ACM-25779 (catalog onboarding). Submariner's equivalent is a
+20-step process — this will need its own subtasks.
 
-#### Proposed Jira changes
+#### NEW: E2E test framework
 
-**Clarify CORENET-7089 scope**: This should cover upstream
-release process only — Conventional Commits, release-please,
-per-PR changelogs, Dependabot, backports. The title "Release
-Automation and Versioning" fits upstream versioning strategy.
+Parent: CORENET-7067. Separate from 7086 (pre-merge CI):
 
-**New story: Downstream release pipeline**: Create a new story
-under CORENET-7067 for the full Konflux release workflow:
-tenant config, Release CRs, FBC catalogs, image signing,
-SBOMs, SLSA, stage/prod flow. This is a large story that will
-need subtasks. Could link to ACM-25779 (catalog onboarding) as
-a dependency.
+- KIND cluster setup for local E2E
+- Ginkgo E2E test suite structure
+- Upgrade E2E (N-1 to N)
+- System validation script (deployment correctness check)
 
-**Clarify CORENET-7079 vs new release story**: 7079 covers
-build infrastructure (Dockerfiles, Tekton pipelines, registry).
-The new story covers the release *process* that uses that
-infrastructure (cutting releases, promoting images, signing).
-7079 is a prerequisite for the new story.
+This is Phase 3 work. Depends on 7081 (build system) and 7086
+(unit tests exist).
 
-**Clarify CORENET-7087 scope**: Currently says "Integrate
-container builds into Prow jobs" but also "image pushing on
-merge to main" and "multi-arch builds" — this reads as upstream
-CI (GHA image push on merge). If downstream CI image builds are
-handled by Konflux (via 7079), then 7087 is upstream-only.
+### Stories That Don't Need Changes
 
-**No changes needed for**: 7082 (downstream repo setup), 7084
-(downstream CI), 7085 (upstream tests in downstream CI). These
-are clear and well-scoped.
+- **7077** — design proposal, gates everything, clear
+- **7082** — downstream repo creation, clear
+- **7083** — Prow jobs, assigned to Prachi, clear
+- **7084** — downstream CI, clear (thin description but scope
+  is obvious)
+- **7087** — upstream CI image builds, clear
 
-#### Summary of proposed Jira actions
+### Actions Summary
 
-1. Update CORENET-7086 description (add tooling details)
-2. Update CORENET-7089 description (scope to upstream release)
-3. Update CORENET-7085 description (add initial scope)
-4. Create new story: "Downstream/Konflux release pipeline"
-5. Optionally create subtasks under 7086, 7081, 7078, 7089
+**Update descriptions** (add comment with proposed scope):
+
+1. CORENET-7086 — add full Phase 1 CI tooling list
+2. CORENET-7089 — scope to upstream release, add tooling
+3. CORENET-7085 — add initial scope (test reuse, coverage)
+
+**Create new stories**:
+
+1. Downstream/Konflux release pipeline (Phase 4)
+2. E2E test framework (Phase 3)
+
+**Create subtasks** (after descriptions are agreed):
+
+1. 10 subtasks under 7086
+2. 5 subtasks under 7081
+3. 4 subtasks under 7078 and 7089
+4. 3 subtasks under 7079
+
+**Grooming priority**: 7086 first, then 7089, then 7085, then
+new stories.
+
+Draft comments for 7086, 7089, 7085 are in
+`mcn/2026-05-19-jira-draft-comments.md`.
