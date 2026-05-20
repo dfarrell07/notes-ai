@@ -70,7 +70,7 @@ backed.
 | zizmor | GHA security | Yes | 1 | MIT. 5K stars. Rust. 24 security rules |
 | conform (or PR title check) | Commit/PR linting | Yes | 1 | MPL-2.0. 520 stars. Go. K8s-native. See below |
 | kubeconform | K8s manifest schemas | Yes | 1 | Apache-2.0. 3K stars. Replaces kubeval |
-| kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Red Hat/StackRox |
+| kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Consider Kubescape too |
 | lychee | Link checking | Yes | 1 | Apache-2.0. 3.6K stars. Rust. Replaces md-link-check |
 | shfmt | Shell formatting | Yes | 2 | BSD-3. 8.8K stars. mvdan (Go contributor) |
 | checkmake | Makefile linting | Consider | 3 | MIT. 1.2K stars. Small but active |
@@ -103,7 +103,7 @@ backed.
 | dependency-review-action | Block PRs with vuln deps | Yes | 1 | MIT. GitHub official |
 | GODEBUG flags | tar/zip path traversal prevention | Yes | 1 | Go toolchain (BSD-3). Not a tool, just a flag |
 | Anchore/grype | Container vuln scanning | Yes | 2 | Apache-2.0. 11.5K stars. Faster than Trivy |
-| Gitleaks | Secrets scanning in PR diffs | Yes | 2 | MIT. 25.8K stars. Replaces TruffleHog (AGPL) |
+| Gitleaks/Betterleaks | Secrets scanning in PR diffs | Yes | 2 | MIT. 25.8K stars. Betterleaks is successor |
 | harden-runner | GHA network egress control | Yes | 2 | Apache-2.0. StepSecurity (SaaS backend) |
 | Cosign | Keyless image/artifact signing | Yes | 3 | Apache-2.0. 5.9K stars. OpenSSF/Sigstore |
 | Syft | SBOM generation (SPDX/CycloneDX) | Yes | 3 | Apache-2.0. 8.4K stars. Multi-ecosystem |
