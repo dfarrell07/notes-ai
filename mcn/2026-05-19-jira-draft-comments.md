@@ -1,10 +1,14 @@
 ---
 date: 2026-05-19T00:00:00Z
 topic: mcn
-tags: [jira, draft-comments, ci, release, testing]
+tags: [jira, draft-comments, ci]
 ---
 
-# Draft Jira Comments
+# Draft Jira Comment
+
+Only CORENET-7086 needs a comment right now. The others (7089,
+7085) just need description updates when the time comes — they're
+blocked on earlier work anyway.
 
 ## CORENET-7086 — Enable Pre-merge testing automation
 
@@ -26,38 +30,3 @@ up GHA workflows covering:
 GHA for linting/unit/images, Prow for cloud E2E (CORENET-7083).
 
 Will split into subtasks — this is too much for one PR.
-
----
-
-## CORENET-7089 — Release Automation and Versioning
-
----
-
-Proposing for upstream release process:
-
-- Release notes maintained in-repo as a markdown file.
-  AI PR review agent suggests release note text when a PR
-  warrants one — author adds it if appropriate. Similar to
-  how Submariner does it but without a separate website repo.
-- Version tagging and GitHub Release workflow
-- Backport automation via labels (korthout/backport-action)
-- Dependabot for GHA and Go module updates
-
-No Conventional Commits enforcement — prefer human-readable
-commit messages. Open to other approaches.
-
----
-
-## CORENET-7085 — Enable upstream tests in Downstream CI
-
----
-
-Proposing:
-
-- Run upstream unit + E2E tests as Prow jobs on openshift/mcn
-- Coverage tracking with per-package ratcheting
-- Downstream-specific verification (UBI9/FIPS build works, CRD
-  compat)
-
-Blocked on 7082 (downstream repo), 7086 (upstream tests), 7083
-(Prow config).
