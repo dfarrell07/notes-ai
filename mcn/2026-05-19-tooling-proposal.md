@@ -407,6 +407,12 @@ so `no-unaliased: true` is safe. Configure regex rules for
 standard K8s package patterns. Use golangci-lint v2.12+ to avoid
 the non-determinism bug.
 
+**Health audit**: 17 stars, Apache-2.0 license. Single maintainer
+(Julian Friedman). Latest release v0.2.0 (Dec 2024) fixed the
+non-determinism bug. Unique in golangci-lint — no other linter
+enforces import alias consistency. Vendored in golangci-lint,
+insulated from upstream tempo. Clean.
+
 ### modernize
 
 **Current version**: Part of golang.org/x/tools (v0.40.0 in
@@ -429,6 +435,12 @@ suggestions apply. Run with `--fix` during development but review
 diffs. The nilness edge cases are documented and the problematic
 analyzers have been disabled from automatic application.
 
+**Health audit**: Part of golang.org/x/tools. BSD-3-Clause. Official
+Go team (Alan Donovan). Continuously updated. Known panics in
+stringscut (#77451) and rangeint (#77161) — treated as release
+blockers by Go team. Partial overlap with gocritic style checks.
+Vendored in golangci-lint, pinned version insulates from panics.
+
 ### funcorder
 
 **Current version**: v0.6.0 (manuelarte/funcorder). Added to
@@ -448,6 +460,10 @@ controversial and breaks logical grouping. Very new, low adoption
 **MCN verdict**: Enable defaults only (constructor + struct-method).
 Do NOT enable alphabetical — creates friction without benefit.
 Skip `function` unless package-level ordering causes confusion.
+
+**Health audit**: 18 stars, Apache-2.0, solo maintainer. v0.6.0
+(April 2026). New linter, low adoption. Simple AST checks — low
+bug surface. Unique in golangci-lint. Vendored.
 
 ### recvcheck
 
@@ -470,6 +486,11 @@ operators have many structs with methods — reconcilers, webhooks,
 controllers. Mixed receivers are a real bug source. Add `*.String`
 to exclusions if using fmt.Stringer with value receivers.
 
+**Health audit**: 10 stars, MIT, solo maintainer. v0.3.0 (May
+2026). Competitor smrcptr exists but lacks golangci-lint
+integration. Kyma project (K8s) adopted recvcheck successfully
+with exclusions for DeepCopyObject and String.
+
 ### iface
 
 **Current version**: v1.4.2 in golangci-lint. Maintained at
@@ -490,6 +511,10 @@ was to disable `unused` and `opaque` by default due to noise.
 Optionally add `unexported`. Do NOT enable `unused` or `opaque` —
 K8s operators use cross-package interfaces and interface returns
 for testability idiomatically, causing high false positive rates.
+
+**Health audit**: 18 stars, Apache-2.0, solo maintainer. v1.4.3
+(May 2026, active). Zero open issues. `identical` is safe;
+`opaque`/`unused` confirmed noisy for K8s operator patterns.
 
 ### depguard (vs gomodguard)
 
@@ -515,6 +540,11 @@ irrelevant for new project. Typical deny rules: `io/ioutil`,
 `math/rand$` -> `math/rand/v2`, `log$` -> `log/slog`. Add
 gomodguard only if you need module-level version pinning.
 
+**Health audit**: ~200 stars, GPL-3.0 (fine for tooling), small
+team (3 contributors). v2 stable. Last published March 2025 —
+low activity but functional. Complements gomodguard (package-level
+vs module-level). Confirmed no overlap.
+
 ### sloglint
 
 **Current version**: v0.11.1 (July 2025). Supports autofix.
@@ -539,6 +569,10 @@ SDK default (logr + zap): skip. If choosing slog as application
 API (bridged to logr): enable with `no-mixed-args` and
 `no-raw-keys` at minimum.
 
+**Health audit**: 217 stars, MPL-2.0, go-simpler org. v0.12.0
+(recent). Active development. Listed on Go Wiki slog resources.
+Only useful if using slog — irrelevant for logr+zap.
+
 ### promlinter
 
 **Current version**: v0.3.0 (86 stars). Uses upstream
@@ -558,6 +592,11 @@ These metrics are simply invisible to the linter. Small project
 **MCN verdict**: Enable. Low noise (skips what it can't parse),
 catches real naming violations. The cost of wrong metrics naming
 in a shipped operator is high.
+
+**Health audit**: 91 stars, Apache-2.0, solo maintainer (yeya24).
+v0.3.0 (April 2024 — over 1 year old). Low recent activity.
+Wraps upstream prometheus/client_golang promlint. If promlinter
+is abandoned, fall back to `testutil.CollectAndLint()` in tests.
 
 ### exhaustive
 
@@ -580,6 +619,12 @@ K8s operators define state machine enums (phase, condition types)
 — missing a value in a switch is a real bug. Set
 `check-generated: false`.
 
+**Health audit**: 339 stars, BSD-2-Clause, solo maintainer. Last
+release v0.12.0 (Nov 2023 — 18+ month gap). Memory issues with
+golangci-lint (#5065). Proto-generated enum noise requires careful
+config. Use `explicit-exhaustive-switch` mode for conservative
+adoption. Unique coverage — no other linter does this.
+
 ### bidichk
 
 **Current version**: v0.3.3 (March 2025, 42 stars, 0 open issues).
@@ -597,7 +642,14 @@ stars).
 
 **MCN verdict**: Enable. Zero cost, zero noise. For an open-source
 K8s operator consumed by others, this is basic supply chain
-hygiene.
+hygiene. **Note**: Redundant with gosec G116 — if gosec is enabled
+(which it is via golangci-lint), consider dropping bidichk to avoid
+duplicate checks.
+
+**Health audit**: 42 stars, MIT, solo maintainer. v0.3.3 (March
+2025). 0 open issues. Simple byte scanner — minimal bug surface.
+Near-complete overlap with gosec G116 rule. Keep only if you want
+granular per-rune configuration that gosec doesn't offer.
 
 ### faillint
 
@@ -614,6 +666,11 @@ together cover most functionality within golangci-lint.
 
 **MCN verdict**: Skip. Use depguard (package-level) + forbidigo
 (function-level) instead — both integrated in golangci-lint.
+
+**Health audit**: 244 stars, BSD-3-Clause, maintained by Fatih
+Arslan (vim-go creator). v1.15.0 (March 2025). Not in golangci-lint
+(issue #1025 remains open). depguard + forbidigo confirmed to fully
+cover faillint's features with better integration. SKIP confirmed.
 
 ### forbidigo
 
@@ -635,3 +692,44 @@ family) and add operator-specific rules. Useful early bans:
 `^fmt\.Print(|f|ln)$` (use structured logging),
 `^http\.DefaultClient$` (enforce timeouts). Pair with depguard
 for package-level governance.
+
+**Health audit**: 167 stars, Apache-2.0, solo maintainer (Andrew
+Brown). Latest release v2.3.1 (April 2026, very recent). Fully
+subsumes faillint when paired with depguard. `analyze_types` mode
+resolves through aliases/embedding. Clean.
+
+## Health Audit Summary — All 15 Go Tools
+
+| Tool | Stars | License | Maintainer | Risk | Unique? |
+| --- | --- | --- | --- | --- | --- |
+| golangci-lint v2 | 18.9K | GPL-3.0 | Solo (ldez) | Bus factor | Yes |
+| KAL | 136 | Apache-2.0 | SIG API Mach | Pre-release | Yes (31 rules) |
+| goheader | 30 | GPL-3.0 | Solo | Vendored | Unique in GCL |
+| importas | 17 | Apache-2.0 | Solo | Vendored | Unique in GCL |
+| modernize | N/A | BSD-3 | Go team | Low | Partial gocritic |
+| funcorder | 18 | Apache-2.0 | Solo | New/small | Unique in GCL |
+| recvcheck | 10 | MIT | Solo | Small | vs smrcptr |
+| iface | 18 | Apache-2.0 | Solo | FP risk | Unique in GCL |
+| depguard | 200 | GPL-3.0 | Small team | Stable | vs gomodguard |
+| sloglint | 217 | MPL-2.0 | go-simpler | Active | slog-only |
+| promlinter | 91 | Apache-2.0 | Solo | Stale (1yr) | vs test promlint |
+| exhaustive | 339 | BSD-2 | Solo | 18mo gap | Unique |
+| bidichk | 42 | MIT | Solo | Redundant | vs gosec G116 |
+| faillint | 244 | BSD-3 | Fatih Arslan | SKIP | Covered by above |
+| forbidigo | 167 | Apache-2.0 | Solo | Active | Function-level |
+
+**License summary**: All fine for dev tooling. GPL-3.0 (golangci-lint,
+goheader, depguard) is standard for Go linting tools — never
+distributed with your project.
+
+**Updated recommendations based on audits**:
+
+- **bidichk**: Downgrade to "consider" — redundant with gosec G116
+  if gosec is enabled. Only add if NOT running gosec.
+- **exhaustive**: Add "configure carefully" warning — 18-month
+  release gap, memory issues, proto noise. Use
+  `explicit-exhaustive-switch` mode.
+- **promlinter**: Add note that upstream `testutil.CollectAndLint()`
+  provides runtime-equivalent coverage as a safety net.
+- **faillint**: SKIP confirmed — depguard + forbidigo fully covers
+  its features with golangci-lint integration.
