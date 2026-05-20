@@ -241,6 +241,8 @@ of actual Jira descriptions.
    dependency-review, Gitleaks, harden-runner)
 9. Dependabot config
 10. CRD validation CI (codegen diff, crdify, go-apidiff)
+11. Dependency license compliance (lichen or go-licenses with
+    CNCF-approved allowlist — same as Submariner)
 
 #### CORENET-7089 subtasks (upstream release)
 

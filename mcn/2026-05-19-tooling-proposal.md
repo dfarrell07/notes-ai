@@ -72,6 +72,7 @@ backed.
 | kubeconform | K8s manifest schemas | Yes | 1 | Apache-2.0. 3K stars. Replaces kubeval |
 | kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Consider Kubescape too |
 | lychee | Link checking | Yes | 1 | Apache-2.0. 3.6K stars. Rust. Replaces md-link-check |
+| lichen or go-licenses | Dependency license compliance | Yes | 2 | Submariner uses lichen with CNCF allowlist |
 | shfmt | Shell formatting | Yes | 2 | BSD-3. 8.8K stars. mvdan (Go contributor) |
 | checkmake | Makefile linting | Consider | 3 | MIT. 1.2K stars. Small but active |
 | IBM/tekton-lint | Tekton YAML | Skip | - | Apache-2.0. 31 stars. Barely maintained. Use kubeconform |
