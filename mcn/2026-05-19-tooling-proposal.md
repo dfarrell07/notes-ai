@@ -81,13 +81,13 @@ backed.
 | govulncheck | Go vulnerability scanning (SARIF) | Yes | 1 |
 | CodeQL | SAST via GitHub Code Scanning | Yes | 1 |
 | OSSF Scorecard | Supply chain security assessment | Yes | 1 |
-| zizmor | GHA workflow security | Yes | 1 |
+| zizmor | GHA workflow security (also in Non-Go) | Yes | 1 |
 | SHA-pinned actions check | Verify all GHA refs use SHA pins | Yes | 1 |
 | dependency-review-action | Block PRs with known-vulnerable deps | Yes | 1 |
+| GODEBUG security flags | Prevent tar/zip path traversal | Yes | 1 |
 | Anchore/grype | Container vulnerability scanning | Yes | 2 |
 | TruffleHog | Verified secrets scanning in PR diffs | Yes | 2 |
 | harden-runner | Network egress control for GHA | Yes | 2 |
-| GODEBUG security flags | Prevent tar/zip path traversal | Yes | 1 |
 | Cosign keyless signing | Image + Helm chart signing | Yes | 3 |
 | Syft | SBOM generation (SPDX) | Yes | 3 |
 | SLSA provenance | Build provenance attestations | Yes | 3 |
@@ -100,23 +100,23 @@ backed.
 | --- | --- | --- | --- |
 | Ginkgo/Gomega | BDD test framework + matchers | Yes | 1 |
 | envtest | Local API server for controller tests | Yes | 1 |
+| `-shuffle=on` test flag | Catch ordering-dependent tests | Yes | 1 |
+| `go mod tidy -diff` | Clean go.mod drift check (Go 1.26+) | Yes | 1 |
 | KIND clusters | E2E test infrastructure | Yes | 2 |
 | Codecov | Coverage reporting with PR comments | Yes | 2 |
 | Go native fuzzing | Webhook validation fuzz tests | Yes | 2 |
 | go-ordered-test | Test isolation detector (weekly) | Yes | 2 |
 | go-stress-test | Flaky test detector (nightly) | Yes | 2 |
 | overcover | Coverage ratchet (only goes up) | Yes | 2 |
+| upgrade E2E | N-1 to N version upgrade testing | Yes | 3 |
+| system validation | Deployment correctness script | Yes | 3 |
 | go-test-split-action | Integration test parallelization | Consider | 3 |
 | gotesplit | E2E parallelization via artifacts | Consider | 3 |
 | CIFuzz/OSS-Fuzz | Continuous fuzzing (10-20 min/PR) | Consider | 3 |
-| upgrade E2E | N-1 to N version upgrade testing | Yes | 3 |
-| system validation | Deployment correctness script | Yes | 3 |
 | version skew testing | N-1 compat between components | Consider | 3 |
 | binary size tests | Prevent binary bloat (min/max MB) | Consider | 3 |
 | KWOK + k6 | Controller performance testing | Consider | 3 |
 | CANNIER | ML-informed flake detection | Consider | 3 |
-| `-shuffle=on` test flag | Catch ordering-dependent tests | Yes | 1 |
-| `go mod tidy -diff` | Clean go.mod drift check (Go 1.26+) | Yes | 1 |
 
 ## 5. CRD and API Validation
 
@@ -152,12 +152,12 @@ backed.
 | Per-PR changelog files | Contour pattern, CI-enforced | Yes | 2 |
 | release-please | Automated versioning from commits | Yes | 3 |
 | GoReleaser | Cross-platform binary builds | Consider | 3 |
-| GoReleaser dry-run on config change | Catch release config bugs | Yes | 3 |
+| Dependabot auto-fix | Regenerate code on dep updates | Yes | 2 |
 | Backport action | Auto cherry-pick on label | Yes | 3 |
+| GoReleaser dry-run on config change | Catch release config bugs | Yes | 3 |
 | Release artifact verification | Diff release vs source | Yes | 3 |
 | Fake release smoke test | Daily `v9.9.9-fake` build | Yes | 3 |
 | Renovate | Advanced dep management (if needed) | Consider | 3 |
-| Dependabot auto-fix | Regenerate code on dep updates | Yes | 2 |
 
 ## 8. CI Workflow Patterns
 
@@ -215,9 +215,10 @@ Read-only tools only.
    category-labeled, assembled at release time. Best pattern found
    across 50 projects.
 
-4. **KAL with all 28 checks enabled** — MCN starts fresh, no GA
-   API constraints. Enable `nobools`, `optionalfields`,
-   `requiredfields`, `integers` from day one.
+4. **KAL with selective checks** — MCN starts fresh but KAL is
+   pre-release. Enable jsontags, optionalorrequired, requiredfields,
+   defaults, statussubresource, nobools first. Expand as KAL
+   stabilizes.
 
 5. **crdify over go-apidiff for CRD changes** — check serialized
    CRD YAML schema, not just Go API surface.
@@ -615,7 +616,8 @@ is abandoned, fall back to `testutil.CollectAndLint()` in tests.
 
 ### exhaustive
 
-**Current version**: 339 stars, 45 releases, actively maintained.
+**Current version**: 339 stars, 45 releases. Last release Nov 2023
+(18+ month gap).
 
 **Pro**: Catches real bugs — adding new enum value silently falls
 through to default. Pulumi found it prevented multiple runtime
@@ -739,8 +741,8 @@ distributed with your project.
 
 **Updated recommendations based on audits**:
 
-- **bidichk**: Downgrade to "consider" — redundant with gosec G116
-  if gosec is enabled. Only add if NOT running gosec.
+- **bidichk**: Dropped — redundant with gosec G116 (already
+  enabled via golangci-lint).
 - **exhaustive**: Add "configure carefully" warning — 18-month
   release gap, memory issues, proto noise. Use
   `explicit-exhaustive-switch` mode.
