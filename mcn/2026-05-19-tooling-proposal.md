@@ -78,12 +78,12 @@ backed.
 
 **Changes from initial proposal (post-audit)**:
 
-- **gitlint**: Replaced with **siderolabs/conform** (Go, 520
-  stars, MPL-2.0, K8s-native). gitlint is unmaintained (3yr gap,
-  seeking co-maintainers). conform provides Conventional Commits +
-  DCO + GPG validation as a single Go binary with official GHA.
-  Alternative: squash merges + `action-semantic-pull-request` to
-  lint only PR titles (lightest weight, pairs with release-please).
+- **gitlint**: Replaced with **siderolabs/conform** as an option
+  for DCO enforcement (Go, 520 stars, MPL-2.0). gitlint is
+  unmaintained (3yr gap, seeking co-maintainers). conform is
+  optional — no commit format enforcement required. We use
+  human-readable commits with AI-suggested release notes instead
+  of Conventional Commits.
 - **IBM/tekton-lint**: Downgraded from "Consider" to "Skip" — 31
   stars, 2+ year stale, lost original maintainer. Use kubeconform
   with Tekton CRD schemas for structural validation instead.
