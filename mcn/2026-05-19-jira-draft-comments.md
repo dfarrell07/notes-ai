@@ -14,7 +14,7 @@ blocked on earlier work anyway.
 
 ---
 
-Planning to set up GHA workflows covering:
+Been researching what CI tooling to use here. So far looking at:
 
 - golangci-lint v2 (strict config, plus KAL for CRD conventions)
 - Standard non-Go linting (markdownlint, yamllint, shellcheck,
@@ -27,6 +27,6 @@ Planning to set up GHA workflows covering:
   notes)
 - Dependabot for GHA and Go module updates
 
-GHA for linting/unit/images, Prow for cloud E2E (CORENET-7083).
-
-Will split into subtasks — this is too much for one PR.
+Thinking GHA for linting/unit/images, Prow for cloud E2E
+(CORENET-7083). Still working through the details — will split
+into subtasks once the approach solidifies.
