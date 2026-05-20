@@ -322,3 +322,77 @@ tooling proposal:
 3. **CORENET-7085** — third. Needs any description at all.
 4. **CORENET-7090** — lower. CNO integration is blocked on other
    work anyway.
+
+### Jira Structure Analysis — Gaps and Proposed Changes
+
+Reviewed all downstream/Konflux stories against the tooling
+proposal. The current structure has gaps.
+
+#### What exists for downstream/Konflux
+
+| Jira | Covers | Actual Konflux scope |
+| --- | --- | --- |
+| CORENET-7079 | Container image infra (downstream) | Konflux Dockerfiles, Tekton pipelines, registry |
+| CORENET-7082 | Initial downstream repo setup | Create openshift/mcn, sync from upstream |
+| CORENET-7084 | Downstream CI to deploy MCN | Prow CI on downstream builds |
+| CORENET-7085 | Upstream tests in downstream CI | Run upstream tests on downstream builds |
+| CORENET-7087 | Container image builds in CI | Upstream CI image builds + push |
+| CORENET-7089 | Release automation and versioning | Ambiguous — upstream or downstream? |
+| ACM-25779 | Konflux-build-catalog onboarding | Specifically Konflux catalog |
+
+#### What's missing
+
+The full downstream release pipeline has no dedicated story:
+
+- Konflux tenant configuration (konflux-release-data)
+- ReleasePlanAdmission setup
+- Enterprise Contract policy
+- Stage release workflow (Release CRs, snapshots)
+- Prod release workflow
+- FBC catalog setup and management
+- Image signing (Cosign) and SBOM (Syft) at release time
+- SLSA provenance attestations
+- RPM lockfiles (if needed)
+- OLM bundle generation and validation
+
+These are Phase 4 items from the tooling proposal. They're
+substantial — Submariner's equivalent is a 20-step process with
+15 dedicated Claude Code skills.
+
+#### Proposed Jira changes
+
+**Clarify CORENET-7089 scope**: This should cover upstream
+release process only — Conventional Commits, release-please,
+per-PR changelogs, Dependabot, backports. The title "Release
+Automation and Versioning" fits upstream versioning strategy.
+
+**New story: Downstream release pipeline**: Create a new story
+under CORENET-7067 for the full Konflux release workflow:
+tenant config, Release CRs, FBC catalogs, image signing,
+SBOMs, SLSA, stage/prod flow. This is a large story that will
+need subtasks. Could link to ACM-25779 (catalog onboarding) as
+a dependency.
+
+**Clarify CORENET-7079 vs new release story**: 7079 covers
+build infrastructure (Dockerfiles, Tekton pipelines, registry).
+The new story covers the release *process* that uses that
+infrastructure (cutting releases, promoting images, signing).
+7079 is a prerequisite for the new story.
+
+**Clarify CORENET-7087 scope**: Currently says "Integrate
+container builds into Prow jobs" but also "image pushing on
+merge to main" and "multi-arch builds" — this reads as upstream
+CI (GHA image push on merge). If downstream CI image builds are
+handled by Konflux (via 7079), then 7087 is upstream-only.
+
+**No changes needed for**: 7082 (downstream repo setup), 7084
+(downstream CI), 7085 (upstream tests in downstream CI). These
+are clear and well-scoped.
+
+#### Summary of proposed Jira actions
+
+1. Update CORENET-7086 description (add tooling details)
+2. Update CORENET-7089 description (scope to upstream release)
+3. Update CORENET-7085 description (add initial scope)
+4. Create new story: "Downstream/Konflux release pipeline"
+5. Optionally create subtasks under 7086, 7081, 7078, 7089
