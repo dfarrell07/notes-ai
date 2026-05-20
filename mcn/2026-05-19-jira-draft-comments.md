@@ -6,8 +6,8 @@ tags: [jira, draft-comments, ci, release, testing]
 
 # Draft Jira Comments — For Review Before Posting
 
-Draft comments for three MCN Jira issues. Tone: sharing research
-and opening discussion, not presenting final decisions.
+Draft comments for three MCN Jira issues. Sharing research and
+direction, open to input but not blocking on it.
 
 ## CORENET-7086 — Enable Pre-merge testing automation
 
@@ -15,76 +15,61 @@ Draft comment:
 
 ---
 
-I've been doing some research into what CI tooling we should
-consider for MCN. Looked at how ~50 K8s/CNCF projects handle
-pre-merge testing (Cilium, Istio, cert-manager, etcd, Argo CD,
-Gateway API, OVN-K, etc.) and wanted to share what I found as a
-starting point for discussion.
+I've been researching CI tooling for MCN — looked at how ~50
+K8s/CNCF projects handle pre-merge testing (Cilium, Istio,
+cert-manager, etcd, Argo CD, Gateway API, OVN-K, etc.). Here's
+what I'm planning and some of the options I'm considering.
 
-### What other projects typically run in GHA
+### GHA linting workflow
 
-Most projects in this space use a combination of these tools.
-Not saying we need all of them from day one, but this is the
-landscape:
+**Go linting** — golangci-lint v2 with a strict config. Planning
+to start from the Submariner config and add some newer linters:
 
-**Go linting** — golangci-lint v2 is the universal choice. Some
-interesting newer linters worth considering:
+- kube-api-linter (KAL) from kubernetes-sigs for CRD API
+  conventions. Pre-release but backed by SIG API Machinery and
+  already used by Gateway API, openshift/api, and cluster-api.
+  Adds some setup complexity (custom golangci-lint binary) but
+  catches things nothing else does.
+- importas for consistent K8s import aliases
+- modernize (official Go team) for modern idioms
+- depguard/forbidigo for blocking deprecated packages and
+  functions
 
-- kube-api-linter (KAL) from kubernetes-sigs — enforces K8s API
-  conventions on CRD types. Gateway API, openshift/api, and
-  cluster-api use it. Pre-release but backed by SIG API Machinery.
-  Thoughts on whether this is worth the setup complexity?
-- importas — enforces consistent K8s import aliases (corev1 etc.)
-- modernize — official Go team tool for modern idioms
+**Non-Go linting** — standard tools: markdownlint, yamllint,
+shellcheck, hadolint. Plus:
 
-**Non-Go linting** — the usual suspects that most projects run:
-markdownlint, yamllint, shellcheck, hadolint. Two newer ones
-worth discussing:
+- kubeconform for K8s manifest validation (replaces abandoned
+  kubeval)
+- kube-linter (Red Hat/StackRox) for K8s security checks.
+  Kubescape is another option here with broader coverage.
+- actionlint + zizmor for GHA workflow correctness and security
 
-- kubeconform (replaces the abandoned kubeval) for K8s manifest
-  validation
-- kube-linter (Red Hat/StackRox) for K8s security checks — or
-  possibly Kubescape (CNCF Incubating, broader coverage). Anyone
-  have experience with either?
-- actionlint + zizmor for GHA workflow linting/security — these
-  are complementary, most projects run both
+**Security scanning** — govulncheck (official Go team), CodeQL,
+OSSF Scorecard, dependency-review-action, Gitleaks for secrets.
 
-**Security scanning** — govulncheck seems like a no-brainer
-(official Go team). CodeQL and OSSF Scorecard are standard. For
-secrets scanning, Gitleaks (MIT) seems preferable to TruffleHog
-(AGPL). Open to other suggestions here.
+**AI-powered PR review** — planning to try Claude-based
+non-blocking reviews for security issues, RBAC changes, and
+release note suggestions. Several projects are doing this now
+(Chaos Mesh, Loki, Envoy Gateway). Easy to add or remove since
+they're informational only.
 
-**AI-powered PR review** — this is more experimental. Some
-projects (Chaos Mesh, Loki, Envoy Gateway) are using Claude or
-Gemini to auto-review PRs for security issues, RBAC changes, and
-release note suggestions. Non-blocking, informational only.
-Interested in whether the team thinks this is worth trying.
+**Testing** — Ginkgo/Gomega + envtest, `-shuffle=on` from day
+one.
 
-**Testing** — Ginkgo/Gomega + envtest seems like the standard
-choice for K8s operators. One interesting pattern: using
-`-shuffle=on` to catch ordering-dependent tests from day one.
+### GHA vs Prow
 
-### GHA vs Prow split
+Planning to follow the OVN-K pattern: GHA for linting/unit/images
+and Prow for real cloud E2E (covered by CORENET-7083).
 
-The pattern from OVN-K and other OpenShift operators is GHA for
-linting/unit/images and Prow for real cloud E2E. That seems right
-for MCN too — CORENET-7083 covers the Prow side.
+### Splitting this story
 
-### This story might be too big
+This is a lot of scope for one story. I'll likely split it into
+subtasks as I work through it — linting configs, GHA workflows,
+security scanning, etc.
 
-Looking at the scope, this could be 10+ separate PRs. Might be
-worth creating subtasks. Some natural groupings:
-
-1. Linting config files
-2. GHA linting workflow
-3. GHA unit test + branch enforcement workflows
-4. Security scanning workflows
-5. AI review workflows (if we want them)
-6. Dependabot config
-
-I've got detailed notes on all of these tools including health
-audits, license checks, and alternatives analysis. Happy to share
-more details on any specific tool or walk through the research.
+I have detailed notes on all the tools including health/license
+audits. Happy to share if anyone wants to dig into specific
+choices.
 
 ---
 
@@ -94,53 +79,37 @@ Draft comment:
 
 ---
 
-This story doesn't have a description yet. I've been looking at
-how other K8s projects handle release automation and have some
-options to discuss.
+This story needs a description. Here's what I'm thinking based
+on research into how other K8s projects handle releases.
 
-### Commit message format
+### Direction I'm leaning
 
-Two main approaches I've seen:
+**Commit format** — Conventional Commits (feat:, fix:, etc.).
+This enables automated changelog and version bumping. Planning
+to use siderolabs/conform (Go binary, also handles DCO) or PR
+title validation for enforcement.
 
-- **Conventional Commits** (feat:, fix:, etc.) — enables automated
-  changelog generation. Most projects going this route use either
-  siderolabs/conform (Go binary, also does DCO checks) or PR title
-  validation with action-semantic-pull-request
-- **Free-form** with per-PR changelog files (Contour pattern) —
-  every PR includes a small changelog file, assembled at release
-  time. Avoids commit message enforcement but still gets structured
-  release notes
+**Changelog** — per-PR changelog files (the Contour pattern).
+Every PR adds a small file in `changelogs/unreleased/`, CI
+enforces it, files get assembled at release time. This was the
+best release note pattern I found across 50 projects — avoids
+the single-CHANGELOG merge conflict problem.
 
-I'm leaning toward Conventional Commits + per-PR changelog files
-(some projects do both) but curious what others think.
+**Versioning** — release-please (GitHub Action) for automated
+version bumps from Conventional Commits. Note: the GitHub App
+was shut down Aug 2025, must use the Action.
 
-### Versioning automation
+**Dependency updates** — Dependabot for GHA (monthly) and Go
+modules (weekly). Auto-fix workflow to regenerate code on dep
+updates.
 
-release-please (Google) seems to be the most popular option for
-automating version bumps from Conventional Commits. Note: the
-GitHub App was shut down in Aug 2025 — must use the Action.
-Alternative is manual tagging, which is simpler but more
-error-prone.
+**Backports** — korthout/backport-action for auto cherry-picks
+based on labels.
 
-### Other release tooling to consider
+**Supply chain** — Cosign for image signing, Syft for SBOMs,
+SLSA provenance. Probably Phase 3 rather than day one.
 
-- Dependabot for automated dependency updates (GHA monthly, Go
-  modules weekly)
-- korthout/backport-action for auto cherry-picks to release
-  branches
-- Cosign for image signing, Syft for SBOMs, SLSA for provenance
-  (these could be Phase 3 rather than day one)
-- GoReleaser dry-run on config changes — catches release script
-  bugs before release day
-
-### Questions for the team
-
-- Do we want Conventional Commits from day one, or start simpler?
-- Per-PR changelog files — worth the overhead?
-- When should we add supply chain security (Cosign/SLSA)? Day one
-  or closer to first release?
-
-More details in my research notes if anyone wants to dig deeper.
+Open to different approaches on any of this.
 
 ---
 
@@ -150,33 +119,23 @@ Draft comment:
 
 ---
 
-This story doesn't have a description yet. Here are some initial
-thoughts based on how other OpenShift operators handle this.
+This story needs a description. Here's what I think it should
+cover based on the OVN-K and other OpenShift operator patterns.
 
-### What I think this should cover
+### Proposed scope
 
-- Running upstream unit tests as a Prow presubmit on the downstream
+- Run upstream unit tests as a Prow presubmit on the downstream
   repo (openshift/mcn)
-- Running upstream E2E tests against downstream-built images
-- Coverage tracking (Codecov seems standard, with go-test-coverage
-  for per-package ratcheting)
-- Periodic test quality checks (detecting flaky tests, test
-  isolation issues)
-
-### Downstream-specific testing
-
-Beyond just rerunning upstream tests, we probably need:
-
-- Verify the downstream build (UBI9, FIPS) produces a working
-  operator
-- CRD compatibility between upstream and downstream
+- Run upstream E2E tests against downstream-built images
+- Coverage tracking via Codecov with per-package ratcheting
+- Periodic test quality checks (flaky test detection, test
+  isolation)
+- Downstream-specific verification: UBI9/FIPS build produces
+  a working operator, CRD compatibility between upstream and
+  downstream
 
 ### Dependencies
 
-This is blocked on several other stories:
-
-- CORENET-7082 (downstream repo needs to exist)
-- CORENET-7086 (upstream tests need to exist first)
-- CORENET-7083 (Prow jobs need to be configured)
-
-Would be good to confirm the sequencing here. Thoughts?
+Blocked on CORENET-7082 (downstream repo), CORENET-7086 (upstream
+tests exist), and CORENET-7083 (Prow configured). Will start
+planning details once those are further along.
