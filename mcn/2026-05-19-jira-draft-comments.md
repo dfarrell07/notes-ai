@@ -84,6 +84,12 @@ on research into how other K8s projects handle releases.
 
 ### Direction I'm leaning
 
+I'm reading this story as covering the **upstream** release
+process — how we version, tag, and publish releases from the
+upstream repo. Downstream Konflux pipelines (stage/prod releases,
+image signing, FBC catalogs) are a separate concern covered by
+the downstream stories (7079, 7082, 7084).
+
 **Commit format** — Conventional Commits (feat:, fix:, etc.).
 This enables automated changelog and version bumping. Planning
 to use siderolabs/conform (Go binary, also handles DCO) or PR
@@ -105,9 +111,6 @@ updates.
 
 **Backports** — korthout/backport-action for auto cherry-picks
 based on labels.
-
-**Supply chain** — Cosign for image signing, Syft for SBOMs,
-SLSA provenance. Probably Phase 3 rather than day one.
 
 Open to different approaches on any of this.
 
