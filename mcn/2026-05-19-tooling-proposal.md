@@ -68,7 +68,7 @@ backed.
 | hadolint | Dockerfiles | Yes | 1 | GPL-3.0. 12K stars. Integrates ShellCheck |
 | actionlint | GHA correctness | Yes | 1 | MIT. 3.5K stars. Go binary. Pair with zizmor |
 | zizmor | GHA security | Yes | 1 | MIT. 5K stars. Rust. 24 security rules |
-| conform (or PR title check) | Commit/PR linting | Yes | 1 | MPL-2.0. 520 stars. Go. K8s-native. See below |
+| conform | DCO + commit hygiene (not Conventional Commits) | Consider | 2 | MPL-2.0. 520 stars. Go. Optional |
 | kubeconform | K8s manifest schemas | Yes | 1 | Apache-2.0. 3K stars. Replaces kubeval |
 | kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Consider Kubescape too |
 | lychee | Link checking | Yes | 1 | Apache-2.0. 3.6K stars. Rust. Replaces md-link-check |
@@ -198,21 +198,19 @@ All Apache-2.0 or MIT licensed. ko (8.3K stars) is well-established.
 
 ## 7. Release Automation
 
-All MIT or Apache-2.0. Note: release-please GitHub App was shut
-down Aug 2025 — must use the GitHub Action instead.
+All MIT or Apache-2.0. No Conventional Commits — prefer
+human-readable commit messages. Release notes are human-written
+with AI suggestions via PR review agent.
 
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
 | Dependabot | GHA monthly + Go modules weekly | Yes | 1 |
-| Per-PR changelog files | Contour pattern, CI-enforced | Yes | 2 |
-| release-please | Automated versioning (Action, not App) | Yes | 3 |
-| GoReleaser | Cross-platform binary builds | Consider | 3 |
 | Dependabot auto-fix | Regenerate code on dep updates | Yes | 2 |
+| In-repo release notes | Human-written, AI-suggested per PR | Yes | 2 |
 | Backport action | Auto cherry-pick on label | Yes | 3 |
-| GoReleaser dry-run on config change | Catch release config bugs | Yes | 3 |
 | Release artifact verification | Diff release vs source | Yes | 3 |
-| Fake release smoke test | Daily `v9.9.9-fake` build | Yes | 3 |
-| Renovate | Advanced dep management (if needed) | Consider | 3 |
+| GoReleaser | Cross-platform binary builds (if CLI) | Consider | 3 |
+| Fake release smoke test | Daily `v9.9.9-fake` build | Consider | 3 |
 
 ## 8. CI Workflow Patterns
 
@@ -263,34 +261,32 @@ Read-only tools only.
    eliminates upstream Dockerfiles entirely. Downstream requires
    UBI9 for Red Hat builds.
 
-2. **Conventional Commits + release-please** — automates version
-   bumps and changelogs from commit messages.
+2. **Human-readable commits + AI-suggested release notes** — no
+   Conventional Commits. AI PR review agent suggests release note
+   text when warranted. Author adds to in-repo release notes file.
+   Similar to Submariner's approach but without separate website.
 
-3. **Per-PR changelog files (Contour pattern)** — CI-enforced,
-   category-labeled, assembled at release time. Best pattern found
-   across 50 projects.
-
-4. **KAL with selective checks** — MCN starts fresh but KAL is
+3. **KAL with selective checks** — MCN starts fresh but KAL is
    pre-release. Enable jsontags, optionalorrequired, requiredfields,
    defaults, statussubresource, nobools first. Expand as KAL
    stabilizes.
 
-5. **crdify over go-apidiff for CRD changes** — check serialized
+4. **crdify over go-apidiff for CRD changes** — check serialized
    CRD YAML schema, not just Go API surface.
 
-6. **GHA + Prow split** — GHA for linting/unit/images/AI reviews.
+5. **GHA + Prow split** — GHA for linting/unit/images/AI reviews.
    Prow for real cloud E2E, upgrades, scale testing.
 
-7. **golangci-lint v2 `default: none` with explicit enables** —
+6. **golangci-lint v2 `default: none` with explicit enables** —
    deterministic, no surprise additions from lint upgrades.
 
-8. **`.github/env` for centralized version pinning** — single file
+7. **`.github/env` for centralized version pinning** — single file
    controls Go, golangci-lint versions across all CI jobs.
 
-9. **OSSF Scorecard from day one** — single workflow, instant
+8. **OSSF Scorecard from day one** — single workflow, instant
    security visibility and public badge.
 
-10. **Three AI review workflows** — security, RBAC, release notes.
+9. **Three AI review workflows** — security, RBAC, release notes.
     Non-blocking, confidence-scored, read-only tools.
 
 ## Adoption Phases

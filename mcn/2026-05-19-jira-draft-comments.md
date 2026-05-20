@@ -35,13 +35,16 @@ Will split into subtasks — this is too much for one PR.
 
 Proposing for upstream release process:
 
-- Conventional Commits + release-please for automated versioning
-  and changelogs
-- Per-PR changelog files (Contour pattern) assembled at release
-  time
-- Backport automation via labels
+- Release notes maintained in-repo as a markdown file.
+  AI PR review agent suggests release note text when a PR
+  warrants one — author adds it if appropriate. Similar to
+  how Submariner does it but without a separate website repo.
+- Version tagging and GitHub Release workflow
+- Backport automation via labels (korthout/backport-action)
+- Dependabot for GHA and Go module updates
 
-Open to other approaches.
+No Conventional Commits enforcement — prefer human-readable
+commit messages. Open to other approaches.
 
 ---
 

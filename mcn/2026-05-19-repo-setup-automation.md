@@ -244,10 +244,11 @@ of actual Jira descriptions.
 
 #### CORENET-7089 subtasks (upstream release)
 
-1. Conventional Commits enforcement (conform or PR title check)
-2. release-please workflow (GitHub Action)
-3. Per-PR changelog system (Contour pattern, CI enforced)
-4. Backport automation (korthout/backport-action)
+1. Release notes file in repo (human-written, AI-suggested via
+   PR review agent — no Conventional Commits needed)
+2. Version tagging and GitHub Release creation
+3. Backport automation (korthout/backport-action)
+4. Dependabot config (GHA monthly, Go modules weekly)
 
 #### CORENET-7079 subtasks (downstream images)
 
