@@ -89,23 +89,42 @@ backed.
 
 ## 3. Security Scanning
 
-| Tool | What It Does | Adopt? | Phase |
-| --- | --- | --- | --- |
-| govulncheck | Go vulnerability scanning (SARIF) | Yes | 1 |
-| CodeQL | SAST via GitHub Code Scanning | Yes | 1 |
-| OSSF Scorecard | Supply chain security assessment | Yes | 1 |
-| zizmor | GHA workflow security (also in Non-Go) | Yes | 1 |
-| SHA-pinned actions check | Verify all GHA refs use SHA pins | Yes | 1 |
-| dependency-review-action | Block PRs with known-vulnerable deps | Yes | 1 |
-| GODEBUG security flags | Prevent tar/zip path traversal | Yes | 1 |
-| Anchore/grype | Container vulnerability scanning | Yes | 2 |
-| TruffleHog | Verified secrets scanning in PR diffs | Yes | 2 |
-| harden-runner | Network egress control for GHA | Yes | 2 |
-| Cosign keyless signing | Image + Helm chart signing | Yes | 3 |
-| Syft | SBOM generation (SPDX) | Yes | 3 |
-| SLSA provenance | Build provenance attestations | Yes | 3 |
-| OSV-Scanner | Dual-mode vuln scanning (PR + weekly) | Consider | 2 |
-| Trivy multi-branch | Scan all supported release branches | Yes | 3 |
+| Tool | What It Does | Adopt? | Phase | Audit Notes |
+| --- | --- | --- | --- | --- |
+| govulncheck | Go vuln scanning (reachability) | Yes | 1 | BSD-3. Official Go team. Gold standard |
+| CodeQL | SAST via GitHub Code Scanning | Yes | 1 | MIT action. Free for OSS. Industry standard |
+| OSSF Scorecard | Supply chain security scoring | Yes | 1 | Apache-2.0. OpenSSF/Linux Foundation |
+| zizmor | GHA security (also in Non-Go) | Yes | 1 | MIT. 5K stars. Complements actionlint |
+| SHA-pinned actions check | Verify GHA SHA pins | Yes | 1 | MIT. 50 stars. Partially redundant w/ Scorecard |
+| dependency-review-action | Block PRs with vuln deps | Yes | 1 | MIT. GitHub official |
+| GODEBUG flags | tar/zip path traversal prevention | Yes | 1 | Go toolchain (BSD-3). Not a tool, just a flag |
+| Anchore/grype | Container vuln scanning | Yes | 2 | Apache-2.0. 11.5K stars. Faster than Trivy |
+| TruffleHog | Verified secrets scanning | Yes | 2 | **AGPL-3.0**. Fine as standalone CI tool only |
+| harden-runner | GHA network egress control | Yes | 2 | Apache-2.0. StepSecurity (SaaS backend) |
+| Cosign | Keyless image/artifact signing | Yes | 3 | Apache-2.0. 5.9K stars. OpenSSF/Sigstore |
+| Syft | SBOM generation (SPDX/CycloneDX) | Yes | 3 | Apache-2.0. 8.4K stars. Multi-ecosystem |
+| SLSA provenance | Build provenance attestations | Yes | 3 | Apache-2.0. OpenSSF. Low stars but backed |
+| Trivy | Multi-branch vuln scanning | Yes | 3 | Apache-2.0. 31.7K stars. Mar 2026 compromise |
+| OSV-Scanner | Dual-mode vuln scanning | Consider | 2 | Apache-2.0. Google. Wraps govulncheck for Go |
+
+**Audit notes**:
+
+- **TruffleHog**: AGPL-3.0 — safe as standalone CI scanner but
+  cannot be imported as a library. Alternative: Gitleaks (MIT).
+- **Trivy**: March 2026 supply chain compromise (malicious v0.69.4,
+  fake binaries on Docker Hub). DB updates suspended temporarily.
+  Running Grype alongside provides defense in depth.
+- **OSV-Scanner**: Partially redundant with govulncheck for Go-only
+  projects — OSV-Scanner wraps govulncheck internally. Adds value
+  for multi-language or container scanning.
+- **SHA-pinned actions check**: Partially redundant with Scorecard's
+  Pinned-Dependencies check. Faster for CI gating. Keep both.
+- **harden-runner**: SaaS backend phones home to StepSecurity.
+  Some orgs may object. Community tier free for GitHub-hosted only.
+- **Grype vs Trivy**: High overlap on container vulns. Different
+  databases catch different things. Running both is intentional
+  defense in depth. Grype is faster; Trivy is broader (IaC,
+  secrets, K8s).
 
 ## 4. Testing
 
