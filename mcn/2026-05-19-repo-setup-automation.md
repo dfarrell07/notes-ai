@@ -123,7 +123,7 @@ downstream" (In Progress, Major priority, assigned to Yossi Boaron)
 
 ## My Assignments (Daniel Farrell) — Summary
 
-10 open issues assigned to me across repo setup and automation:
+11 open issues assigned to me across repo setup and automation:
 
 1. CORENET-7078 — Container image infra (upstream)
 2. CORENET-7079 — Container image infra (downstream)
@@ -135,9 +135,10 @@ downstream" (In Progress, Major priority, assigned to Yossi Boaron)
 8. CORENET-7087 — Container image builds in CI
 9. CORENET-7089 — Release automation and versioning
 10. CORENET-7155 — Agents to automate kube bump
-11. ACM-25779 — Konflux-build-catalog onboarding
+11. ACM-25779 — Konflux-build-catalog onboarding (ACM project)
 
-Of these, 7085, 7089, and 7090 have no description and need grooming.
+Of these, 7085 and 7089 have no description and need grooming.
+7090 (CNO Integration, unassigned) also needs grooming.
 
 ## Open Questions
 
@@ -145,8 +146,9 @@ Of these, 7085, 7089, and 7090 have no description and need grooming.
   what's the timeline?
 - CORENET-7085, 7089, 7090 have no description — need grooming
 - How does CNO integration (7090) affect the repo setup sequence?
-- What existing Submariner automation patterns carry over vs need
-  rethinking?
+- ~~What existing Submariner automation patterns carry over vs need
+  rethinking?~~ — Resolved. See tooling proposal
+  (`mcn/2026-05-19-tooling-proposal.md`) and 50 project deep dives.
 
 ## Suggested Sequencing
 
@@ -175,7 +177,7 @@ on Jira. No changes yet — this is the plan.
 These stories exist but have vague or missing descriptions. They
 should be updated with specific tooling from the proposal.
 
-CORENET-7086 — Enable pre-merge testing automation:
+#### CORENET-7086 — Enable pre-merge testing automation
 
 Current description mentions golangci-lint, gofmt, license headers,
 API compat checks. Update to include the full Phase 1 linting stack:
@@ -195,7 +197,7 @@ API compat checks. Update to include the full Phase 1 linting stack:
 
 This is a large story. Consider creating subtasks (see below).
 
-CORENET-7085 — Enable upstream tests in downstream CI:
+#### CORENET-7085 — Enable upstream tests in downstream CI
 
 No description. Should cover:
 
@@ -204,7 +206,7 @@ No description. Should cover:
 - Coverage reporting to Codecov
 - go-test-coverage ratcheting
 
-CORENET-7089 — Release automation and versioning:
+#### CORENET-7089 — Release automation and versioning
 
 No description. Should cover:
 
@@ -222,7 +224,7 @@ No description. Should cover:
 - Syft SBOM generation
 - SLSA provenance attestations
 
-CORENET-7090 — CNO Integration:
+#### CORENET-7090 — CNO Integration
 
 No description. Not directly related to tooling but may need CI
 jobs for integration testing with CNO.
