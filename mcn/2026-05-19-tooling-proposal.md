@@ -66,7 +66,7 @@ backed.
 | hadolint | Dockerfiles | Yes | 1 | GPL-3.0. 12K stars. Integrates ShellCheck |
 | actionlint | GHA correctness | Yes | 1 | MIT. 3.5K stars. Go binary. Pair with zizmor |
 | zizmor | GHA security | Yes | 1 | MIT. 5K stars. Rust. 24 security rules |
-| gitlint | Commit messages | Careful | 1 | MIT. 930 stars. 2yr release gap. Seeking co-maint |
+| conform (or PR title check) | Commit/PR linting | Yes | 1 | MPL-2.0. 520 stars. Go. K8s-native. See below |
 | kubeconform | K8s manifest schemas | Yes | 1 | Apache-2.0. 3K stars. Replaces kubeval |
 | kube-linter | K8s manifest security | Yes | 1 | Apache-2.0. 3.4K stars. Red Hat/StackRox |
 | lychee | Link checking | Yes | 1 | Apache-2.0. 3.6K stars. Rust. Replaces md-link-check |
@@ -76,10 +76,12 @@ backed.
 
 **Changes from initial proposal (post-audit)**:
 
-- **gitlint**: Downgraded from "Yes" to "Careful" — 2+ year
-  release gap, maintainer seeking co-maintainers (issue #134).
-  Alternative: commitlint (JS, 17K stars, active). Or use
-  release-please's Conventional Commit enforcement instead.
+- **gitlint**: Replaced with **siderolabs/conform** (Go, 520
+  stars, MPL-2.0, K8s-native). gitlint is unmaintained (3yr gap,
+  seeking co-maintainers). conform provides Conventional Commits +
+  DCO + GPG validation as a single Go binary with official GHA.
+  Alternative: squash merges + `action-semantic-pull-request` to
+  lint only PR titles (lightest weight, pairs with release-please).
 - **IBM/tekton-lint**: Downgraded from "Consider" to "Skip" — 31
   stars, 2+ year stale, lost original maintainer. Use kubeconform
   with Tekton CRD schemas for structural validation instead.
