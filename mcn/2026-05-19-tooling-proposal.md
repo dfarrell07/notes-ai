@@ -272,6 +272,30 @@ releases.
 **MCN verdict**: Must-have. New project starts with v2 directly —
 no migration pain. v1 will not receive new features.
 
+**Health audit**:
+
+- Stars: ~18,900. Contributors: 1,571 forks. Active: 20+ releases
+  since v2 launch (March 2025).
+- License: GPL-3.0-only (formerly AGPL). Fine for dev tool — never
+  distributed with Apache-2.0 project. Same as using GCC to build
+  proprietary software.
+- Bus factor: HIGH RISK — single primary maintainer (Ludovic
+  Fernandez). Funded ~$18K/year via Open Collective. No corporate
+  backing. No CNCF project status.
+- Security: No direct compromise ever. Release attestations and
+  SBOMs published. No cosign/sigstore signatures. Linter vetting
+  is informal (go/analysis API required, PR review by maintainer).
+- Supply chain: 114 bundled linters create broad attack surface.
+  No bundled linter has ever been compromised. go/analysis
+  framework limits what linter code can execute.
+- Coverage: Subsumes all mainstream Go linters. Running any bundled
+  linter standalone is fully redundant.
+- Operational: Memory-hungry (staticcheck can use 34GB+). Set
+  `GOGC=50`, `--timeout=10m`, reduce `--concurrency` if needed.
+- Alternatives: None viable at scale. De facto standard.
+- Risk mitigation: Pin versions, pin GHA by SHA, monitor project
+  health, be prepared to fork if maintainer steps away.
+
 ### kube-api-linter (KAL)
 
 **Current version**: Pre-release, no tagged versions (pseudo-
