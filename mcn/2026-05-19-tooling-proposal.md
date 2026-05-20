@@ -140,9 +140,9 @@ backed.
 
 ## 4. Testing
 
-All MIT or Apache-2.0 licensed. No concerns except overcover
-(7 stars, single maintainer) and Istio tools (must be copied
-from monorepo, not standalone packages).
+All MIT or Apache-2.0 licensed. No concerns except Istio tools
+(go-ordered-test, go-stress-test must be copied from monorepo,
+not standalone packages).
 
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
