@@ -56,7 +56,7 @@ backed.
   selectively" based on pre-release stability concerns
 - **sloglint**: Clarified as conditional on logging strategy choice
 
-## 2. Non-Go Linting
+## 2. Non-Go Linting (health audits pending)
 
 | Tool | Content Type | Adopt? | Phase |
 | --- | --- | --- | --- |
