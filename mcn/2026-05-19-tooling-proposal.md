@@ -128,6 +128,10 @@ backed.
 
 ## 4. Testing
 
+All MIT or Apache-2.0 licensed. No concerns except overcover
+(7 stars, single maintainer) and Istio tools (must be copied
+from monorepo, not standalone packages).
+
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
 | Ginkgo/Gomega | BDD test framework + matchers | Yes | 1 |
@@ -152,6 +156,8 @@ backed.
 
 ## 5. CRD and API Validation
 
+All Apache-2.0 licensed. crdify (14 stars) is early-stage.
+
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
 | controller-gen | CRD + DeepCopy generation | Yes | 1 |
@@ -166,6 +172,8 @@ backed.
 
 ## 6. Container Images
 
+All Apache-2.0 or MIT licensed. ko (8.3K stars) is well-established.
+
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
 | ko | Go image builds without Dockerfile | Yes (upstream) | 1 |
@@ -178,11 +186,14 @@ backed.
 
 ## 7. Release Automation
 
+All MIT or Apache-2.0. Note: release-please GitHub App was shut
+down Aug 2025 — must use the GitHub Action instead.
+
 | Tool | What It Does | Adopt? | Phase |
 | --- | --- | --- | --- |
 | Dependabot | GHA monthly + Go modules weekly | Yes | 1 |
 | Per-PR changelog files | Contour pattern, CI-enforced | Yes | 2 |
-| release-please | Automated versioning from commits | Yes | 3 |
+| release-please | Automated versioning (Action, not App) | Yes | 3 |
 | GoReleaser | Cross-platform binary builds | Consider | 3 |
 | Dependabot auto-fix | Regenerate code on dep updates | Yes | 2 |
 | Backport action | Auto cherry-pick on label | Yes | 3 |
