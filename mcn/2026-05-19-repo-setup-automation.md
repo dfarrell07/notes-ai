@@ -144,11 +144,8 @@ Of these, 7085 and 7089 have no description and need grooming.
 
 - Upstream repo approval depends on CORENET-7077 (design proposal) —
   what's the timeline?
-- CORENET-7085, 7089, 7090 have no description — need grooming
 - How does CNO integration (7090) affect the repo setup sequence?
-- ~~What existing Submariner automation patterns carry over vs need
-  rethinking?~~ — Resolved. See tooling proposal
-  (`mcn/2026-05-19-tooling-proposal.md`) and 50 project deep dives.
+- Stories needing grooming: see Jira Planning section below
 
 ## Suggested Sequencing
 
