@@ -32,7 +32,7 @@ Two dimensions control what gets installed:
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
-- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11)
+- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts
 
 ### Dotfiles
 
@@ -45,7 +45,7 @@ Key custom settings to preserve:
 - **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch) — Claude Code can read/clone/pull freely but pushing needs physical approval.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
 - **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only).
-- **i3 config**: Alt modifier, PulseAudio volume keys, brightness keys, dmenu, nm-applet autostart.
+- **i3 config**: Alt modifier, PulseAudio volume keys, brightness keys, dmenu, nm-applet autostart. Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately).
 
 ### SSH Keys
@@ -80,6 +80,8 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **Kernel**: blacklist intel_vbtn
+- **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
+- **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
 - **Services**: fail2ban, libvirtd, cups, dkms, expressvpn (gated). Docker disabled by default (start on demand)
 - **Virtualization**: libvirt, qemu-kvm
 
@@ -286,6 +288,14 @@ Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit
 8. Task queue repo → create private repo, laptop-side issue poller + `claude -p` runner
 9. Multi-OS → test on macOS, adjust conditionals
 10. Distrobox dev container → if CSB blocks host tools, full dev environment inside Fedora container
+
+**Testing:**
+- **Fedora VM** (libvirt): spin up a fresh Fedora VM, run `make all`, verify idempotency (second run = 0 changed). Fastest feedback loop — test before touching real hardware.
+- **macOS**: run `make all` on the Mac desktop with `profile: personal`. Verify skipped roles, brew installs, dotfiles.
+- **RHEL CSB**: `make check` (dry run) first, then `make all` with graceful failure handling. Document what breaks.
+- **Idempotency**: every test runs the playbook twice. Second run must report 0 changed.
+- **Linting**: `make lint` passes (ansible-lint + yamllint) before any real machine run.
+- **Smoke tests**: after `make all` — `ssh -T git@github.com`, `claude-work --version`, `claude-personal --version`, `oc version`, `podman info`, `gh auth status`.
 
 ## Remote Access
 
