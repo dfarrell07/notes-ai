@@ -760,12 +760,33 @@ podman run --rm --network=slirp4netns --read-only \
 
 See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementation design.
 
+## Authentication Architecture
+
+**Full credential refresh during migration** — regenerate ALL passwords (LastPass vault was exfiltrated in 2022).
+
+**Auth stack (strongest to weakest):**
+1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian, Slack. Phishing-resistant, passwordless. ~20 of 100 slots.
+2. **FIDO2 security key** (non-resident, zero slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
+3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 32 OATH slots. Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
+4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 25+ chars), KeePassXC vault, device logins, recovery email.
+5. **Recovery codes** — all in KeePassXC on encrypted USB (2 copies, 2 physical locations). Never in Bitwarden (locked out = need these).
+6. **SMS 2FA** — removed from ALL accounts. Zero exceptions.
+
+**Security questions**: random strings stored in Bitwarden notes, never real answers.
+
+**YubiKey dual enrollment**: both keys registered separately with every service. For TOTP, add seed to both keys at the same time before closing the setup page. No way to clone passkeys between keys.
+
+**Google Advanced Protection**: enroll both personal and work accounts. Requires security key for all logins. Strongest Google protection.
+
+**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `shred -u export.csv`.
+
 ## Manual Setup
 
 **All machines:**
 - YubiKey SSH key enrollment (verify firmware 5.7+ with `ykman info`)
-- Bitwarden setup + migrate from LastPass
+- Bitwarden setup + migrate from LastPass (full credential refresh)
 - KeePassXC setup for offline vault (recovery codes, vault password)
+- Register both YubiKeys as passkeys on: GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian
 - `gh auth login`
 - Chrome sign-in (bookmarks/extensions)
 - Mullvad or ProtonVPN setup
