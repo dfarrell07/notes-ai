@@ -231,6 +231,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 ### SSH
 
 - **Server hardening** (`/etc/ssh/sshd_config`): `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`, `MaxAuthTries 3`, `LoginGraceTime 30`, `AllowUsers <username>`, `X11Forwarding no`, `AllowAgentForwarding no`, `AllowTcpForwarding no`, `ClientAliveInterval 300`, `ClientAliveCountMax 2`.
+- **Post-quantum SSH**: Fedora crypto-policies block PQ KEX by default. Fix: `sudo update-crypto-policies --set DEFAULT:TEST-PQ` or add `KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256` to `~/.ssh/config`. Verify: `ssh -vT git@github.com 2>&1 | grep kex` should show `sntrup761`. Protects session data from "harvest now, decrypt later" attacks. PQ identity keys (ML-DSA) not yet available in production OpenSSH.
 - **Non-default port**: noise reduction (eliminates automated bot traffic), not a security control. Keep below 1024 (privileged) to prevent local attackers from binding if sshd is down.
 - **fail2ban**: installed and enabled. Reduces log noise, catches misconfigured scanners.
 - **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 keys vulnerable to EUCLEAK CVE-2024-45678). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
@@ -303,6 +304,16 @@ Mitigations:
 - Claude Code npm: source leak + concurrent axios trojan (March 2026). Pin exact npm versions.
 - Bitwarden CLI npm: 90-minute trojan in `@bitwarden/cli@2026.4.0` (April 2026). Verify on 2026.4.1+.
 - Multiple MCP server CVEs (Inspector, Filesystem, Git). Audit MCP servers before enabling.
+
+### Post-Quantum Cryptography
+
+**What's quantum-safe now:** AES-256 (LUKS, Ansible Vault), symmetric crypto. No action needed.
+
+**What needs fixing:** SSH key exchange — enable ML-KEM/sntrup761 (Fedora blocks PQ KEX by default). Chrome/Firefox already do PQ TLS. Tailscale has no PQ yet (monitor).
+
+**What to wait for:** PQ identity keys for SSH (ML-DSA, ~2027+), PQ FIDO2 passkeys (~2027-2028), PQ git signing (blocked on OpenSSH/GnuPG), PQ TLS certificates (CA/Browser Forum, ~2027). YubiKey 5 series may need hardware replacement for PQ — check Yubico's PQ firmware roadmap.
+
+**"Harvest now, decrypt later" priority:** SSH sessions (fix now) > API calls over TLS (mostly fixed by browsers) > Tailscale traffic (can't fix yet) > data at rest (already safe).
 
 ### Ansible Playbook Security
 
