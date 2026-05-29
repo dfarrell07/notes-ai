@@ -78,7 +78,7 @@ Work profile default: all. Personal profile default: personal + ovnk + cncf.
 
 ### Third-Party RPM Repos (dnf-based OS only)
 
-acli, docker-ce, expressvpn, gh-cli, google-chrome, google-cloud-sdk, rpmfusion (free + nonfree + nvidia + steam), slack, redhat. Each gated by a boolean with per-OS defaults.
+acli, docker-ce, mullvad/protonvpn, gh-cli, google-chrome, google-cloud-sdk, rpmfusion (free + nonfree + nvidia + steam), slack, redhat. Each gated by a boolean with per-OS defaults.
 
 ### System (become: true, Linux only)
 
@@ -89,7 +89,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **Kernel**: blacklist intel_vbtn
 - **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
-- **Services**: fail2ban, libvirtd, cups, dkms, expressvpn (gated). Docker disabled by default (start on demand)
+- **Services**: fail2ban, libvirtd, cups, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand)
 - **Virtualization**: libvirt, qemu-kvm
 
 ### User Environment (become: false)
@@ -140,7 +140,11 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 
 ### Secrets Management
 
-- **Ansible Vault**: AES-256 encryption. Password in `~/.vault_pass` (mode 0600, outside repo, never committed).
+- **Ansible Vault**: AES-256 encryption. Tiered vault IDs with different trust levels:
+  - **Critical** (SSH keys, production creds): password derived from YubiKey HMAC-SHA1 challenge-response (`ykchalresp -2 "memorized-pin"`). Exists in NO password manager. Both YubiKeys configured with same HMAC secret. Paper backup of hex secret in fireproof safe.
+  - **Infra** (registry tokens, API keys): password in KeePassXC (offline `.kdbx` on USB drive, master password + YubiKey).
+  - **Dev** (env vars, non-sensitive config): password in Bitwarden (cloud, acceptable blast radius).
+  - Password files at `~/.vault_pass_critical`, `~/.vault_pass_infra`, `~/.vault_pass_dev` (all mode 0600, outside repo).
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets.
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600. Note: Vertex AI vars are NOT in zshrc — they live in direnv `.envrc` and claude-work alias only.
@@ -151,7 +155,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 
 - **Firewall**: `public` zone, not FedoraWorkstation (which opens 1025-65535). Default-DROP policy. Allow only SSH (non-default port) + specific dev ports as needed. Allow essential ICMP (destination-unreachable, time-exceeded, echo-reply) — full stealth breaks Path MTU Discovery.
 - **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners.
-- **VPN isolation**: never run ExpressVPN and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
+- **VPN isolation**: never run personal VPN (Mullvad/ProtonVPN) and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
 
 ### SSH
 
@@ -268,7 +272,8 @@ Items that only apply to macOS (personal Mac desktop):
 - **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation.
 - **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
 - **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
-- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source)
+- **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
+- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private)
 
 ## Project Structure
 
@@ -328,7 +333,12 @@ Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit
 **Fedora/RHEL:** `sudo dnf install ansible-core git` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`
 **macOS:** `xcode-select --install` → install Homebrew → `brew install ansible git openssh libfido2` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`. Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2 YubiKey keys). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
 
-Vault password bootstrap: install Bitwarden CLI first (`brew install bitwarden-cli` or `dnf install bitwarden-cli`), `bw login`, retrieve vault password, write to `~/.vault_pass`. Then `make all` can decrypt everything else.
+Vault password bootstrap:
+1. Install `ykman` / `ykchalresp` (in Fedora repos, `brew install ykman` on Mac)
+2. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
+3. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
+4. Install Bitwarden (official binary, NOT npm — npm had 90-min trojan in April 2026) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev`
+5. `make all` decrypts each vault tier with its corresponding password. Shred temp files after.
 
 ## Implementation Phases
 
@@ -435,7 +445,7 @@ Neither app replaces the git task queue for sending work to Claude Code.
 RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation image. Exact hardening profile unknown publicly, but if STIG-based these restrictions apply:
 
 **Likely blocked without IT exception:**
-- **Third-party repos** (Tailscale, ExpressVPN, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
+- **Third-party repos** (Tailscale, Mullvad/ProtonVPN, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
 - **Homebrew/Linuxbrew** — installs outside RPM trust database, blocked by fapolicyd if enforcing
 - **pip --user, go install, npm global** — binaries in ~/  paths blocked by fapolicyd (deny-all, permit-by-exception for RPM-trusted paths)
 - **Custom firewall rules** — STIG requires drop zone, admin-managed
@@ -500,13 +510,23 @@ repo: submariner-operator
 
 **Safety:** `--max-turns 50`, `--max-budget-usd 5.00`, `timeout 1800` (30 min). Systemd adds `MemoryMax=4G`, `CPUQuota=80%`.
 
-**Critical: task queue must run in a container** — `Bash` in allowedTools means Claude can read any file, exfiltrate via DNS/git notes/PR comments, and push to any repo. Mitigations:
-- Run `claude -p` in a disposable Podman container with only the target repo mounted
-- No user home directory, SSH keys, or cloud credentials inside container
-- `--network=none` or network namespace allowing only HTTPS to github.com
+**Critical: task queue must run in a bare Podman container, NOT Distrobox.** Distrobox provides zero security isolation (shares home, network, `/run/host` exposes entire host filesystem). It is an integration tool, not an isolation tool.
+
+The task queue executor uses bare Podman with strict isolation:
+```
+podman run --rm --network=slirp4netns --read-only \
+  --tmpfs /tmp:size=100m --tmpfs /home/claude:size=50m \
+  --memory=4g --cpus=2 --pids-limit=256 \
+  --cap-drop=ALL --security-opt=no-new-privileges \
+  --userns=keep-id -v "$REPO:/workspace:Z" \
+  -e ANTHROPIC_API_KEY="$KEY" claude-task-runner \
+  -p "$PROMPT" --allowedTools "$TOOLS" --max-turns 50
+```
+- Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds
+- Network: forward proxy (Squid) on host allowing only `api.anthropic.com` + `github.com` — blocks DNS exfiltration
 - Repo-scoped deploy key as sole credential (not user's gh auth)
-- Separate PAT for poller (reads issues) vs executor (pushes code) — executor cannot write issues/comments
-- Destroy container after each task
+- Separate PAT for poller (reads issues) vs executor (pushes code)
+- Container destroyed after each task
 
 **PRs require human review/merge** — no unreviewed code lands on main.
 
@@ -520,7 +540,7 @@ See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementatio
 - KeePassXC setup for offline vault (recovery codes, vault password)
 - `gh auth login`
 - Chrome sign-in (bookmarks/extensions)
-- ExpressVPN activation
+- Mullvad or ProtonVPN setup
 
 **Work profile:**
 - `oc login --web` to Konflux cluster (`kflux-prd-rh02`)
