@@ -55,6 +55,10 @@ Key custom settings to preserve:
       CLOUD_ML_REGION=global claude; zsh"
   }
   ccp() {  # Claude Code Personal (not `cp` — shadows copy command)
+    # Guard: prevent sending work code through personal Anthropic account
+    if [[ "$PWD" == */src/openshift/* || "$PWD" == */src/submariner-io/* || "$PWD" == */src/stolostron/* || "$PWD" == */src/code.engineering/* || "$PWD" == */src/gitlab.cee/* ]]; then
+      echo "ERROR: Work directory detected. Use 'cw' for work repos."; return 1
+    fi
     local s="personal-${PWD##*/}"
     tmux new-session -As "$s" "CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
   }
@@ -151,6 +155,13 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **Kernel**: blacklist intel_vbtn. `kernel.yama.ptrace_scope=1` in sysctl (prevent cross-process memory reading). Enable Secure Boot in BIOS.
 - **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
 - **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
+- **Core dumps disabled**: `ulimit -c 0` in shell profile, `kernel.core_pattern=|/bin/false` in sysctl, `ProcessSizeMax=0` in coredump.conf. Prevents secrets from leaking to dump files.
+- **Encrypted swap**: use zram (no disk backing) or dm-crypt swap with random key at boot. `shred` is unreliable on btrfs/SSDs — prefer process substitution over writing secrets to disk.
+- **umask 077**: set in zshrc — new files owner-only by default. Prevents `~/.claude/history.jsonl` and other files from being created world-readable.
+- **fwupd**: `fwupdmgr get-updates && fwupdmgr update` in system role. UEFI/Thunderbolt/NVMe firmware updates.
+- **Outbound firewall (Linux)**: install OpenSnitch (`dnf install opensnitch`) for per-process outbound filtering (Linux equivalent of LuLu on Mac). Catches compromised MCP servers, supply chain attacks phoning home.
+- **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is world-listable.
+- **Lid close + lock**: `HandleLidSwitch=lock` in logind.conf (not `ignore` — ignore prevents suspend but also prevents lock). Or add lid event to xss-lock/i3lock trigger.
 - **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
 - **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
@@ -295,7 +306,7 @@ Mitigations:
 - Git `core.fsmonitor` in crafted repos executes code when Claude runs `git status`.
 
 **Mitigations (deploy via Ansible):**
-- Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass*)`, `Read(~/.config/gh/**)`, `Read(~/.config/gcloud/**)`, `Read(~/.config/acli/**)`, `Read(~/.config/containers/auth.json)`, `Read(~/.claude-work/**)`, `Read(~/.claude-personal/**)`
+- Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass*)`, `Read(~/.config/gh/**)`, `Read(~/.config/gcloud/**)`, `Read(~/.config/acli/**)`, `Read(~/.config/containers/auth.json)`, `Read(~/.claude-work/**)`, `Read(~/.claude-personal/**)`, `Read(/run/host/**)` (Distrobox exposes host filesystem at `/run/host`, bypassing `~/` deny patterns)
 - `git config --global core.hooksPath ~/.config/git/hooks` — override per-repo hooks
 - `git config --global core.fsmonitor false` — prevent fsmonitor code execution
 - Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc before running Claude in any new repo
@@ -497,7 +508,7 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 **Vault password retrieval** (before `make all`):
 1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
 2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
-3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev`
+3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev` → `bw lock && unset BW_SESSION` after retrieval
 4. `make all` decrypts each vault tier. The skill's post-run phase auto-shreds vault password files (`shred -u ~/.vault_pass_*`). Alternative: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
 
 **Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
