@@ -22,7 +22,7 @@ Two dimensions control what gets installed:
 - **OpenShift/K8s:** oc, kubectl, kind, kustomize, helm, opm, subctl, openshift-install, gcloud, aws
 - **Dev:** gh, gemini-cli, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype
 - **K8s code-gen:** controller-gen, client-gen, informer-gen, lister-gen, deepcopy-gen, applyconfiguration-gen, defaulter-gen
-- **Python (pip):** anthropic, gitlint, pydantic, rpm-lockfile-prototype
+- **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype. Note: gitlint dropped (unmaintained 3+ years, supply chain risk).
 
 **Work profile:**
 - **Red Hat:** redhat-internal-cert-install, redhat-internal-openvpn-profiles, acli
@@ -126,10 +126,11 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - After any manual install, config tweak, or system change — update the corresponding Ansible role in `~/laptop-setup` to capture it. The Ansible repo is the source of truth for machine state.
 
 `~/.claude-work/settings.json`:
-- Full permissions (`allow: *`) — YubiKey gate on push is the real safety net, not permission prompts. Claude can read/write/run freely but can't push without physical touch.
+- Permissions: do NOT use `allow: *`. Add specific allow rules for common operations. Add deny rules for sensitive file reads (`~/.ssh/**`, `~/.aws/**`, `~/.kube/**`, `**/.env`, `~/.vault_pass`). YubiKey push gate is the safety net for outbound changes, but file reads need explicit protection.
 - Move machine-specific config (model, MCP servers) to `settings.local.json` so `settings.json` can be shared/versioned.
 - Plugins: work instance gets shipyard, jira, release-management, claude-skills. Personal instance gets claude-skills only. Install via `claude plugin add` with marketplace config in `settings.json` — the `claude` role templates `settings.json` with the `extraKnownMarketplaces` and `enabledPlugins` blocks per instance.
 - MCP servers: work instance gets Atlassian MCP. Personal instance gets none or different set.
+- Sandbox: enable with `bubblewrap` (`dnf install bubblewrap socat`). Set `"sandbox": {"enabled": true}` in settings.
 
 - **Container registry auth**: tokens from vault via credential helper (docker-credential-secretservice), deployed to `~/.config/containers/auth.json` with mode 0600 (work profile)
 - **Distrobox**: Fedora dev container — safety valve for RHEL CSB (work profile on RHEL). See Distrobox section below for full spec.
@@ -198,14 +199,32 @@ Mitigations:
 - `authorized_keys`: remove any non-YubiKey entries before travel.
 - Review and revoke unnecessary cloud CLI sessions (`gcloud auth revoke`, `gh auth logout`).
 
-### Claude Code Instance Isolation
+### Claude Code Security
 
-See User Environment section for setup details. Security-critical points:
-
+**Instance isolation:**
 - Never set `CLAUDE_CODE_USE_VERTEX` globally — checks presence, not value. Must be completely unset for personal instance.
 - Separate `CLAUDE_CONFIG_DIR` prevents credential, MCP server, and session history leakage between contexts.
 - Known bugs: session cross-contamination in same directory (#27658), branch swapping (#60295). Never run both instances in the same working directory.
 - `~/.claude.json` is shared regardless of config dir — low-impact but avoid simultaneous runs when possible.
+
+**Repo trust (cloned repos can attack Claude Code):**
+- Malicious CLAUDE.md files inject into Claude's system prompt — can instruct arbitrary file reads and exfiltration.
+- Malicious `.mcp.json` starts attacker-controlled processes with full user privileges at Claude Code startup.
+- Malicious `.claude/settings.json` can enable `enableAllProjectMcpServers` to auto-approve MCP servers (TrustFall, unpatched).
+- Malicious `.envrc` (direnv) can redirect `ANTHROPIC_BASE_URL` to exfiltrate API keys.
+- Git `core.fsmonitor` in crafted repos executes code when Claude runs `git status`.
+
+**Mitigations (deploy via Ansible):**
+- Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass)`
+- `git config --global core.hooksPath ~/.config/git/hooks` — override per-repo hooks
+- `git config --global core.fsmonitor false` — prevent fsmonitor code execution
+- Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc before running Claude in any new repo
+- Consider enabling Claude Code sandbox (`bubblewrap`): `"sandbox": {"enabled": true}` in settings
+
+**Supply chain incidents (2026):**
+- Claude Code npm: source leak + concurrent axios trojan (March 2026). Pin exact npm versions.
+- Bitwarden CLI npm: 90-minute trojan in `@bitwarden/cli@2026.4.0` (April 2026). Verify on 2026.4.1+.
+- Multiple MCP server CVEs (Inspector, Filesystem, Git). Audit MCP servers before enabling.
 
 ### Ansible Playbook Security
 
@@ -476,7 +495,15 @@ repo: submariner-operator
 
 **Poller:** systemd timer (every 2 min after completion, `Type=oneshot` prevents overlap). Processes issues sequentially, oldest first. Branch naming: `claude/<issue-number>-<slug>`. Opens PR linking the issue, comments with progress.
 
-**Safety:** `--allowedTools` whitelist per repo, `--max-turns 50`, `--max-budget-usd 5.00`, `timeout 1800` (30 min). Systemd adds `MemoryMax=4G`, `CPUQuota=80%`.
+**Safety:** `--max-turns 50`, `--max-budget-usd 5.00`, `timeout 1800` (30 min). Systemd adds `MemoryMax=4G`, `CPUQuota=80%`.
+
+**Critical: task queue must run in a container** — `Bash` in allowedTools means Claude can read any file, exfiltrate via DNS/git notes/PR comments, and push to any repo. Mitigations:
+- Run `claude -p` in a disposable Podman container with only the target repo mounted
+- No user home directory, SSH keys, or cloud credentials inside container
+- `--network=none` or network namespace allowing only HTTPS to github.com
+- Repo-scoped deploy key as sole credential (not user's gh auth)
+- Separate PAT for poller (reads issues) vs executor (pushes code) — executor cannot write issues/comments
+- Destroy container after each task
 
 **PRs require human review/merge** — no unreviewed code lands on main.
 
