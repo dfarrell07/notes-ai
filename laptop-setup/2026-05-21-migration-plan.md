@@ -43,7 +43,7 @@ Two dimensions control what gets installed:
 
 Key custom settings to preserve:
 - **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/github/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases. Remove: Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
-- **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap.
+- **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap. Conditional includes for per-directory email: `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email. Prevents committing with wrong identity.
 - **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
 - **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 600` — one YubiKey tap opens a 10-minute multiplexed session for pushes.
@@ -132,7 +132,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - MCP servers: work instance gets Atlassian MCP. Personal instance gets none or different set.
 
 - **Container registry auth**: tokens from vault via credential helper (docker-credential-secretservice), deployed to `~/.config/containers/auth.json` with mode 0600 (work profile)
-- **Distrobox**: Fedora dev container — safety valve for RHEL CSB (work profile on RHEL)
+- **Distrobox**: Fedora dev container — safety valve for RHEL CSB (work profile on RHEL). See Distrobox section below for full spec.
 
 ## Security
 
@@ -437,7 +437,26 @@ RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation i
 **Impact on the plan:**
 - Distrobox becomes critical, not optional — most dev tools may need to run inside a Fedora container
 - The `make system` and `make packages` targets may partially fail on CSB — need graceful handling
-- May need two-tier approach: minimal host setup (Podman, Distrobox, SSH) + full dev env inside Distrobox container
+- Two-tier approach: minimal host (Podman, Distrobox/Toolbx, SSH, tmux) + full dev env inside container
+
+**Distrobox dev container spec:**
+
+Host provides only: Podman rootless, Distrobox (or Toolbx fallback), SSH, tmux. All dev tools live in a Fedora container.
+
+Container setup via `distrobox.ini` (Ansible generates from Jinja2 template, runs `distrobox assemble create`):
+- Base: Fedora latest
+- Packages via `additional_packages`: Go, Python 3, gcc, clang, vim, zsh, jq, tmux, direnv, fzf, zoxide, shellcheck, shfmt, yamllint, Node.js
+- Binary downloads via `init_hooks`: oc, kubectl, kind, kustomize, helm, opm, subctl, gh, golangci-lint, grype, yq, Claude Code
+- Container commands (podman, buildah, skopeo) delegate to host via `distrobox-host-exec` symlinks — no nested containers
+- kind works: binary in container calls host's Podman to create cluster nodes
+
+Shared with host (Distrobox default): home directory, display, network. All dotfiles, SSH keys, Claude Code config, oh-my-zsh work automatically.
+
+Primary workflow: `distrobox enter dev` → work inside the container. Export sparingly to host (`distrobox-export --bin` for jq, gh, oc) — fapolicyd may block exports anyway.
+
+Upgrade: edit `distrobox.ini`, run `distrobox assemble create --replace`. Home-dir state survives.
+
+See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 
 ## Task Queue Repo
 
