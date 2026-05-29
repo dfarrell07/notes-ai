@@ -629,6 +629,26 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no 
 - Pixelbook sleep → Crostini survives, reattach tmux locally
 - Mac desktop → always running, never sleeps
 
+### Hardware Options (portable coding rigs)
+
+**AR glasses:**
+- **Even Realities G2** ($599) — smart glasses with Claude Code integration (`claude-code-g2`). HUD shows agent status (Thinking/Executing/Listening). Tap ring to approve, hold ring to speak instructions via Whisper. 36g, looks like normal glasses, 2-day battery. Best for monitoring Claude while mobile — you can't read code on it, but you can steer an autonomous agent.
+- **XREAL One Pro** ($599) — virtual monitor via USB-C to iPad/phone. 1080p per eye, readable for terminal text. 2-4 hour sessions. Electrochromic dimming for shade. Plug into iPad → Blink Shell → mosh to laptop → Claude in tmux. Not viable in direct sunlight or for full-day use.
+
+**Keyboards (for iPad/phone pairing):**
+- **Wireless Corne** (ZMK + nice!nano, ~$200 built) — 42-key split, Bluetooth, 200g, genuine pocket size. The only split ergonomic keyboard with BLE. Pairs with iPad, phone, Pixelbook. Steep learning curve (heavy layer use).
+- **Logitech MX Keys Mini** ($100) — compact, BLE, pairs with 3 devices. Not ergonomic but zero friction. Best for travel (airplane tray tables).
+- **ZSA Voyager** ($365) — best split travel keyboard, 217g per half. USB-C only (no Bluetooth) — works with laptop/Pixelbook, unreliable with iPad.
+
+**Voice interaction:**
+- Claude mobile app voice mode for thinking through problems (no code access, no terminal)
+- Voice for intent-level instructions ("fix the retry logic"), not syntax dictation
+- **Bose Ultra Open** or **Shokz OpenComm UC** — open-ear, good mic, all-day comfort
+- DIY pipeline possible: Whisper STT → Claude API → piper TTS. No polished product exists yet.
+
+**The mobile coding rig:**
+iPad Pro (682g) + wireless Corne (200g) + XREAL glasses (84g) = ~1kg total. All compute is remote — mosh + tmux to laptop/Mac over Tailscale. Device in your hands is just a terminal.
+
 ### Known Limitations
 
 - **Work phone → Claude Code is async only** — git task queue, 2-3 min delay. Hard constraint of Vertex AI auth.
