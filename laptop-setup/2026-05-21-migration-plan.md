@@ -188,11 +188,29 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - Disable non-essential telemetry: `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in both instances.
 - Cross-contamination: running personal instance while cd'd into a work repo sends work code through Anthropic. Wrapper scripts should verify current directory is appropriate for the instance before launching.
 
-`~/.claude-work/CLAUDE.md` and `~/.claude-personal/CLAUDE.md`:
+`~/.claude-work/CLAUDE.md` and `~/.claude-personal/CLAUDE.md` (keep under 150 lines each):
 - Always use `--signoff` (`-s`) on git commits
 - You cannot push — pushes route over SSH and require YubiKey touch. Commit to a branch, then ask the user to push. Once pushed, open the PR.
 - Prefer terse responses.
 - After any manual install, config tweak, or system change — update the corresponding Ansible role in `~/laptop-setup` to capture it. The Ansible repo is the source of truth for machine state.
+
+**Parallel work (worktrees):**
+- Always use `claude --worktree <name>` or the `cw`/`cp` aliases (which create tmux sessions) when running multiple Claude sessions on the same repo. Never run two sessions in the same working directory — causes branch swapping (#60295).
+- Worktrees live in `.claude/worktrees/<name>/` (add to `.gitignore`).
+- Remote Control server supports `--spawn worktree` for multi-device parallel sessions.
+- Agent Teams (experimental, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) for coordinated multi-agent work.
+
+**Context hierarchy:**
+- **Managed**: `/etc/claude-code/CLAUDE.md` — organization-wide (CSB only)
+- **User**: `~/.claude-work/CLAUDE.md` or `~/.claude-personal/CLAUDE.md` — personal preferences, always loaded
+- **Project**: `./CLAUDE.md` or `./.claude/CLAUDE.md` — team-shared, checked into git
+- **Local**: `./CLAUDE.local.md` — personal project overrides, gitignored
+- **Nested**: `src/api/CLAUDE.md` — monorepo/subdirectory rules, loaded on-demand when files in that path are read
+- **Path-scoped rules**: `.claude/rules/*.md` with `paths:` frontmatter for conditional loading
+- **Skills**: `.claude/skills/*.md` — loaded only when invoked or auto-matched by description
+- All CLAUDE.md files concatenate (not override). Keep total under ~200 lines across all levels.
+
+**Memory**: auto-memory at `~/.claude/projects/<project>/memory/`. First 200 lines of MEMORY.md loaded at session start. Topic files loaded on-demand. Not shared across machines — project-specific learnings, not portable config.
 
 `~/.claude-work/settings.json`:
 - Permissions: do NOT use `allow: *`. Add specific allow rules for common operations. Add deny rules for sensitive file reads (`~/.ssh/**`, `~/.aws/**`, `~/.kube/**`, `**/.env`, `~/.vault_pass`). YubiKey push gate is the safety net for outbound changes, but file reads need explicit protection.
