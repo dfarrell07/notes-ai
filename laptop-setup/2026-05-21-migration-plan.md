@@ -54,7 +54,7 @@ Key custom settings to preserve:
       CLAUDE_CODE_USE_VERTEX=1 ANTHROPIC_VERTEX_PROJECT_ID=itpc-gcp-hcm-pe-eng-claude \
       CLOUD_ML_REGION=global claude; zsh"
   }
-  cp() {  # Claude Personal
+  ccp() {  # Claude Code Personal (not `cp` — shadows copy command)
     local s="personal-${PWD##*/}"
     tmux new-session -As "$s" "CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
   }
@@ -161,24 +161,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 
 **Claude Code instance isolation (work laptop):**
 
-Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account):
-
-```bash
-# Never set Vertex vars in .zshrc — they override everything and can't be turned off per-project
-# CLAUDE_CODE_USE_VERTEX checks for presence, not value — setting to 0 doesn't work
-
-# Work instance
-alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work \
-  CLAUDE_CODE_USE_VERTEX=1 \
-  ANTHROPIC_VERTEX_PROJECT_ID=itpc-gcp-hcm-pe-eng-claude \
-  CLOUD_ML_REGION=global \
-  claude'
-
-# Personal instance
-alias claude-personal='CLAUDE_CONFIG_DIR=~/.claude-personal claude'
-```
-
-Each instance gets isolated: settings, credentials, session history, MCP servers, plugins. Authenticate each separately (`/login` or API key). Use direnv `.envrc` per project for automatic switching — explicitly `unset` the other context's vars. Never run both in the same working directory.
+Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. Use direnv `.envrc` per project for auto-switching — explicitly `unset` the other context's vars. Never run both in the same working directory.
 
 **Claude Code global config (both instances):**
 
@@ -195,7 +178,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - After any manual install, config tweak, or system change — update the corresponding Ansible role in `~/laptop-setup` to capture it. The Ansible repo is the source of truth for machine state.
 
 **Parallel work (worktrees):**
-- Always use `claude --worktree <name>` or the `cw`/`cp` aliases (which create tmux sessions) when running multiple Claude sessions on the same repo. Never run two sessions in the same working directory — causes branch swapping (#60295).
+- Always use `claude --worktree <name>` or the `cw`/`ccp` aliases (which create tmux sessions) when running multiple Claude sessions on the same repo. Never run two sessions in the same working directory — causes branch swapping (#60295).
 - Worktrees live in `.claude/worktrees/<name>/` (add to `.gitignore`).
 - Remote Control server supports `--spawn worktree` for multi-device parallel sessions.
 - Agent Teams (experimental, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) for coordinated multi-agent work.
@@ -429,7 +412,7 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
     │   #   pip --user: anthropic, pydantic, rpm-lockfile-prototype
     │   #   npm (via brew node): Claude Code
     │   #   curl to ~/.local/bin: subctl, distrobox
-    │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xautolock
+    │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xss-lock
     │   #   versions pinned in variables — update by changing variable, re-run
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
