@@ -377,10 +377,35 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
 - **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (source-available, no public repo — required for GCP)
 - **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
 
-## Project Structure
+## Architecture: Ansible + Claude Code Skill
 
+Ansible handles deterministic provisioning (packages, dotfiles, services, repos). A Claude Code skill wraps it to handle what Ansible can't — interactive auth, diagnostic review, post-run verification, and iterative fixing.
+
+**Skill invocation:** `/laptop-setup` or `make all`
+
+**Skill phases:**
+1. **Pre-flight** — Claude checks: OS detection, YubiKey plugged in, vault passwords accessible, network connectivity, existing state (fresh vs re-run)
+2. **Ansible execution** — runs `ansible-playbook site.yml` with appropriate tags/profile, streams output
+3. **Output review** — Claude reviews Ansible output for failures, diagnoses root causes, suggests or applies fixes
+4. **Interactive auth** — guides user through manual auth steps that Ansible can't automate: `gh auth login`, `oc login --web`, `gcloud auth login`, `acli` login, Bitwarden setup
+5. **Post-run verification** — runs smoke tests (`ssh -T git@github.com`, `claude-work --version`, `podman info`, etc.), reports results
+6. **Summary** — what succeeded, what failed, what needs manual attention, what to run next
+
+**Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
+
+**File structure:**
 ```
 ~/laptop-setup/
+├── CLAUDE.md                       # Project-level instructions for Claude Code
+├── skills/
+│   └── setup/SKILL.md              # Main setup skill (pre-flight → ansible → review → auth → verify)
+├── .claude/
+│   ├── SKILLS.md                   # Skill index
+│   └── rules/                      # Path-scoped rules for role-specific guidance
+├── scripts/
+│   ├── preflight.sh                # Pre-flight checks (YubiKey, vault, network)
+│   ├── smoke-test.sh               # Post-run verification
+│   └── auth-guide.sh               # Interactive auth step guidance
 ├── ansible.cfg                     # become: false default, vault password path
 ├── Makefile
 ├── site.yml                        # two plays: system (become: true) + user (become: false)
@@ -391,7 +416,7 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
 ├── .yamllint
 ├── inventory/localhost.yml
 ├── group_vars/all/
-│   ├── repos.yml                   # ~80 git repos
+│   ├── repos.yml                   # ~114 git repos
 │   └── vault.yml                   # ansible-vault encrypted: SSH keys, registry auth, env vars
 └── roles/
     ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
@@ -437,7 +462,9 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
 | `make cloud` | yes | Cloud CLIs |
 | `make distrobox` | no | Distrobox + Fedora container |
 
-Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit`, `make lint` (ansible-lint + yamllint).
+Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification).
+
+Claude Code skill: `/laptop-setup` — runs pre-flight → `make all` → reviews output → guides interactive auth → runs smoke tests → reports summary. Use this instead of bare `make all` for a guided, diagnostic setup experience.
 
 ## Bootstrap (fresh machine)
 
