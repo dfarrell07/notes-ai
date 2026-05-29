@@ -686,6 +686,22 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 - **Airplane**: iPad Pro + MX Keys Mini or Magic Keyboard. XREAL awkward with seatmates.
 - **Everywhere**: mosh + tmux to laptop/Mac over Tailscale. Device in hand is just a terminal.
 
+### Collaboration
+
+**With technical collaborators** (wife, buddy — both have Claude Code Pro):
+- Shared GitHub repo with `.claude/CLAUDE.md` for team conventions (both Claude instances inherit automatically)
+- Each person works on own branch/worktree, PRs as integration point
+- Shared skills via plugin marketplace (private git repo)
+- `TASKS.md` in repo or GitHub Issues for task coordination
+- Cloud sessions (`claude.ai/code`) for working on shared repos without laptop
+- No session sharing (Agent Teams / Remote Control are single-user) — git is the coordination layer
+
+**With non-technical family** (construction projects, planning):
+- Git repo (your workspace) → GitHub Pages with MkDocs Material (auto-published website family bookmarks on phone)
+- Google Forms embedded for decisions (countertop votes, approvals)
+- Google Docs/Sheets for one-off sharing (itineraries, budgets)
+- Pattern: git is source of truth, published view is the bridge
+
 ### Known Limitations
 
 - **Work phone → Claude Code is async only** — git task queue, 2-3 min delay. Hard constraint of Vertex AI auth.
