@@ -43,7 +43,61 @@ Two dimensions control what gets installed:
 **macOS:** aerospace.toml (i3-like tiling WM), macOS defaults (keyboard repeat, smart quotes off, Finder, Dock)
 
 Key custom settings to preserve:
-- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases, `zstyle ':omz:update' mode auto` (prevent falling behind on security fixes). Remove: `github` plugin (wraps deprecated `hub`, dead weight), Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
+- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, `zstyle ':omz:update' mode auto`. Remove: `github` plugin, Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
+
+  **Shell aliases and functions:**
+  ```bash
+  # Claude Code in tmux (always — sessions survive disconnects)
+  cw() {  # Claude Work — creates/attaches tmux session named after current dir
+    local s="work-${PWD##*/}"
+    tmux new-session -As "$s" "CLAUDE_CONFIG_DIR=~/.claude-work \
+      CLAUDE_CODE_USE_VERTEX=1 ANTHROPIC_VERTEX_PROJECT_ID=itpc-gcp-hcm-pe-eng-claude \
+      CLOUD_ML_REGION=global claude; zsh"
+  }
+  cp() {  # Claude Personal
+    local s="personal-${PWD##*/}"
+    tmux new-session -As "$s" "CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
+  }
+  cls() { tmux list-sessions 2>/dev/null | grep -E "work-|personal-"; }
+  ca() { tmux attach -t "$(tmux list-sessions -F '#{session_name}' | grep -E 'work-|personal-' | head -1)"; }
+  cstatus() {  # What Claude is doing across all sessions
+    for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E 'work-|personal-'); do
+      echo "=== $s ==="; tmux capture-pane -t "$s" -p | tail -3; echo; done
+  }
+
+  # Device access (Tailscale + mosh)
+  alias laptop='mosh laptop.tail'
+  alias mac='mosh mac-desktop.tail'
+  laptop-claude() { mosh laptop.tail -- tmux attach -t "${1:-work}"; }
+  mac-claude() { mosh mac-desktop.tail -- tmux attach -t "${1:-personal}"; }
+
+  # Remote Control (personal Mac)
+  alias rc='claude --remote-control'
+
+  # Git push (YubiKey awareness)
+  gpush() { echo "YubiKey touch required..."; git push "$@"; }
+
+  # Quick nav (supplement zoxide)
+  alias src='cd ~/src'
+  alias subm='cd ~/src/submariner-io'
+  alias ovnk='cd ~/src/openshift/ovn-kubernetes'
+  alias notes='cd ~/src/dfarrell07/notes-ai'
+
+  # Task queue (create issue from CLI)
+  cq() { gh issue create --repo dfarrell07/claude-tasks --title "$1" --body "$2"; }
+
+  # Status
+  alias yk='ykman info'                    # YubiKey status
+  alias vpn='ip route | grep -E "tun|wg"'  # VPN status
+  alias ts='tailscale status'              # Tailscale mesh status
+
+  # Existing aliases (keep)
+  alias gv="gvim -vp"
+  alias gi="grep -rniI --color=always --exclude-dir=vendor"
+  alias ping="ping -i .2"
+  alias pingg="ping www.google.com"
+  alias ping8="ping 8.8.8.8"
+  ```
 - **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap. Conditional includes for per-directory email: `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email. Prevents committing with wrong identity.
 - **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste, `monitor-activity on`, `visual-activity on` (alerts when background Claude sessions produce output).
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
