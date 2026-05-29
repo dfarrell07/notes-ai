@@ -302,7 +302,8 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
 - **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
 - **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
 - **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
-- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private)
+- **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (source-available, no public repo — required for GCP)
+- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
 
 ## Project Structure
 
