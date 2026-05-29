@@ -42,7 +42,7 @@ Two dimensions control what gets installed:
 **macOS:** aerospace.toml (i3-like tiling WM), macOS defaults (keyboard repeat, smart quotes off, Finder, Dock)
 
 Key custom settings to preserve:
-- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/github/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases. Remove: Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
+- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases, `zstyle ':omz:update' mode auto` (prevent falling behind on security fixes). Remove: `github` plugin (wraps deprecated `hub`, dead weight), Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
 - **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap. Conditional includes for per-directory email: `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email. Prevents committing with wrong identity.
 - **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
@@ -154,7 +154,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 ### Network
 
 - **Firewall**: `public` zone, not FedoraWorkstation (which opens 1025-65535). Default-DROP policy. Allow only SSH (non-default port) + specific dev ports as needed. Allow essential ICMP (destination-unreachable, time-exceeded, echo-reply) — full stealth breaks Path MTU Discovery.
-- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners.
+- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. Enable **Tailnet Lock** (free on Personal plan) — prevents rogue node injection even if Tailscale's coordination server is compromised. DERP relays are end-to-end encrypted (they forward WireGuard ciphertext, never hold private keys). Headscale (self-hosted) not needed for 2-3 devices — Tailnet Lock provides equivalent security without infrastructure burden.
 - **VPN isolation**: never run personal VPN (Mullvad/ProtonVPN) and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
 
 ### SSH
@@ -263,6 +263,19 @@ Items that only apply to macOS (personal Mac desktop):
 **Registry credential helper:** `docker-credential-osxkeychain` instead of `docker-credential-secretservice`.
 
 **Manual (cannot automate):** TCC permissions — Accessibility (AeroSpace), Full Disk Access (terminal), App Management (brew autoupdate). Requires GUI interaction.
+
+## Chrome Hardening
+
+Deploy via Ansible as policy JSON — works without enterprise enrollment on Linux (`/etc/opt/chrome/policies/managed/`) and macOS (`/Library/Managed Preferences/`).
+
+- **Extension allowlist**: block all extensions by default (`ExtensionInstallBlocklist: ["*"]`), allowlist by Chrome Web Store ID (uBlock Origin, Bitwarden, etc.)
+- **Disable built-in password manager**: `PasswordManagerEnabled: false`, `AutofillCreditCardEnabled: false`, `AutofillAddressEnabled: false` — use Bitwarden instead
+- **Disable sync on work profile**: `SyncDisabled: true` — prevents syncing compromised extensions across devices
+- **HTTPS-only**: `HttpsOnlyMode: "force_enabled"`
+- **Site isolation**: `SitePerProcess: true` (prevents Chrome from relaxing it under memory pressure)
+- **Separate profiles**: work profile (Jira, GitHub, GCP) and personal profile. Different extension sets, separate cookie jars.
+
+A malicious extension with `<all_urls>` + `cookies` permissions can steal session tokens for Jira, GitHub, and GCP Console. The extension allowlist is the primary defense.
 
 ## Design Decisions
 
