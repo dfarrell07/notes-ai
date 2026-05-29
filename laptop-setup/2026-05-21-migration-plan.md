@@ -148,7 +148,9 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
-- **Kernel**: blacklist intel_vbtn
+- **Kernel**: blacklist intel_vbtn. `kernel.yama.ptrace_scope=1` in sysctl (prevent cross-process memory reading). Enable Secure Boot in BIOS.
+- **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager
+- **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
 - **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
 - **Services**: fail2ban, libvirtd, cups, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand)
@@ -325,9 +327,13 @@ Items that only apply to macOS (personal Mac desktop):
 
 **macOS defaults:** deploy via `community.general.osx_defaults` — key repeat enabled, smart quotes/dashes off, Finder shows extensions and full path, screenshots to ~/Downloads, screen lock immediately on sleep.
 
-**Firewall:** `socketfilterfw --setglobalstate on`, stealth mode on. Works per-application, not per-port like firewalld.
+**Firewall:** `socketfilterfw --setglobalstate on`, stealth mode on (inbound only). Install **LuLu** (free, open-source outbound firewall, `brew install --cask lulu`) — catches compromised MCP servers, supply chain attacks phoning home. socketfilterfw does NOT filter outbound.
 
-**Services (launchd):** systemd units become launchd plists in `~/Library/LaunchAgents/`. Needed for: Claude Code Remote Control server, task queue poller, brew autoupdate.
+**Services (launchd):** systemd units become launchd plists in `~/Library/LaunchAgents/`. Needed for: Claude Code Remote Control server (always use `--sandbox`), task queue poller, brew autoupdate, Homebrew ssh-agent (with `-t 28800` key lifetime).
+
+**SSH**: bind sshd to Tailscale IP only (`ListenAddress 100.x.y.z`). Use drop-in config at `/etc/ssh/sshd_config.d/` (survives macOS updates). Cipher hardening: sntrup761x25519-sha512, chacha20-poly1305, hmac-sha2-512-etm.
+
+**iCloud**: disable Desktop & Documents sync, disable iCloud Keychain (use Bitwarden). Enable Advanced Data Protection. Store FileVault recovery key in KeePassXC, NOT iCloud.
 
 **Brew autoupdate:** `brew tap domt4/autoupdate && brew autoupdate start 43200 --upgrade --cleanup` — equivalent of dnf-automatic.
 
@@ -587,7 +593,7 @@ Neither app replaces the git task queue for sending work to Claude Code.
 - **Local Claude Code**: install in Crostini (`npm install -g @anthropic-ai/claude-code`) with Anthropic Pro for light personal work. 8GB RAM limits heavy use.
 - **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use GPG/PIV workaround or Tailscale SSH (avoids key management).
 - **Browser-based dev**: GitHub Codespaces, code-server for VS Code workflows
-- **Keep ChromeOS** — full Linux install not worth the trade-offs on 8GB/2017 hardware
+- **Keep ChromeOS** — full Linux install not worth the trade-offs on 8GB/2017 hardware. **Confirm Developer Mode is disabled** (Crostini doesn't require it — Developer Mode disables verified boot and encryption). AUE August 2027 — plan migration.
 
 ### Tailscale Mesh
 
