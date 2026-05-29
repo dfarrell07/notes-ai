@@ -120,6 +120,12 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 
 **Claude Code global config (both instances):**
 
+**Data privacy:**
+- Vertex AI (work): prompts go to Google infrastructure, not Anthropic. No training. Customer-controlled retention. Telemetry to Anthropic off by default.
+- Anthropic Pro (personal): turn off "Improve Claude" in privacy settings (5-year retention if on, 30 days if off). No ZDR or DPA on Pro plan. Consumer terms, not commercial.
+- Disable non-essential telemetry: `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in both instances.
+- Cross-contamination: running personal instance while cd'd into a work repo sends work code through Anthropic. Wrapper scripts should verify current directory is appropriate for the instance before launching.
+
 `~/.claude-work/CLAUDE.md` and `~/.claude-personal/CLAUDE.md`:
 - Always use `--signoff` (`-s`) on git commits
 - You cannot push — pushes route over SSH and require YubiKey touch. Commit to a branch, then ask the user to push. Once pushed, open the PR.
@@ -193,8 +199,10 @@ Mitigations:
 
 - No SSH key on phone. No direct network path to laptop.
 - GitHub Issues as task queue: phone can create issues but cannot execute anything on laptop directly.
-- If phone is extracted (Cellebrite, border search): attacker gets GitHub token, can create issues. Mitigated by `--allowedTools` whitelist on laptop's task processor + PRs require human review.
+- If phone is extracted (Cellebrite, border search): attacker gets GitHub token, can create issues. Mitigated by `--allowedTools` whitelist on laptop's task processor + PRs require human review + container isolation.
 - Strong lockscreen PIN (not biometric alone — biometric can be compelled in some jurisdictions).
+- **Pixel hardening**: enable Advanced Protection Mode (Android 16, one toggle — hardware USB blocking, auto-reboot 72h, blocks sideloading). Use Work Profile via Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile). Lockdown Mode (Power+Volume Up) before border crossings — disables biometrics, forces PIN. Set USB default to "No data transfer."
+- **GrapheneOS** (optional, for frequent travelers): 18h auto-reboot (vs 72h stock), duress PIN (silent factory reset), stronger USB blocking. Compatible with GitHub Mobile, Claude app via Sandboxed Google Play.
 
 ### Travel
 
@@ -536,7 +544,7 @@ podman run --rm --network=slirp4netns --read-only \
   -p "$PROMPT" --allowedTools "$TOOLS" --max-turns 50
 ```
 - Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds
-- Network: forward proxy (Squid) on host allowing only `api.anthropic.com` + `github.com` — blocks DNS exfiltration
+- Network: `slirp4netns` (Podman default for rootless). Primary defense is filesystem isolation, not network — container has no credentials to exfiltrate. PR/issue comments remain a channel regardless of network policy.
 - Repo-scoped deploy key as sole credential (not user's gh auth)
 - Separate PAT for poller (reads issues) vs executor (pushes code)
 - Container destroyed after each task
