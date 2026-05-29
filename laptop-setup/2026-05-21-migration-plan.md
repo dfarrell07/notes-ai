@@ -323,7 +323,16 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
 └── roles/
     ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
-    ├── packages/                   # brew/dnf/apt, pip, go, binary downloads. CLI tool versions pinned in variables (oc_version, kubectl_version, etc.) — update by changing the variable, re-run playbook
+    ├── packages/                   # install methods by source:
+    │   #   dnf: system packages, gh (gh-cli repo), acli (acli repo), gcloud (google repo)
+    │   #   brew: python3, node, gemini-cli (+ mac-only: all CLI tools)
+    │   #   binary download (/usr/local/bin): oc, kubectl, kind, kustomize, opm, openshift-install, grype, yq, helm
+    │   #   go install: controller-gen, gofumpt, govulncheck, gci, *-gen, golangci-lint
+    │   #   pip --user: anthropic, pydantic, rpm-lockfile-prototype
+    │   #   npm (via brew node): Claude Code
+    │   #   curl to ~/.local/bin: subctl, distrobox
+    │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xautolock
+    │   #   versions pinned in variables — update by changing variable, re-run
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
     ├── git_repos/                  # clone repos, add fork remotes, profile filters
