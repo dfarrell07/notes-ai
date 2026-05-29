@@ -634,8 +634,7 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no 
 **Current gear:** ZSA Moonlander (custom cables, daily driver), Shokz (sport/safety).
 
 **AR glasses:**
-- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — wearable USB-C monitor. 1920x1200/eye (16:10), X1 chip (3DoF), 700 nits, electrochromic dimming, 82g. Terminal-readable at 14pt+ font. 2-4 hour sessions. **Security: no mic, no camera, no wireless radio** — physically can't capture or transmit data. Chinese company (Beijing) but hardware constraints make origin irrelevant. Do NOT install Nebula app on work devices. Use as plain USB-C display.
-- **Even Realities G2** (~$1,050 with ring + Rx) — notification/approval HUD only (25 chars x 7 lines, can't review code). Tap ring to approve, voice via Whisper. **SECURITY: DO NOT USE FOR WORK.** 4-mic always-on array, Chinese company subject to National Intelligence Law, undisclosed cloud audio processing. No hardware mic kill switch. Can capture room conversations including work calls. Personal-only, and even then only when no work context is present.
+- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — wearable USB-C monitor. 1920x1200/eye (16:10), X1 chip (3DoF), 700 nits, electrochromic dimming, 82g. Terminal-readable at 14pt+ font. 2-4 hour sessions. No mic, no camera, no wireless radio — safe for work. Do NOT install Nebula app on work devices.
 
 **Keyboards:**
 - **Moonlander** (already owned) — works with iPad/phone via USB-C direct (recognized as USB HID). Disable RGB LEDs to avoid iPad power complaints. Tethered but functional. Primary desk keyboard.
@@ -652,7 +651,7 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no 
 **The rigs:**
 - **Park bench**: iPad Pro + Moonlander (USB-C) + XREAL 1S. ~1.5kg. All compute remote.
 - **Coffee shop**: iPad Pro + Corne (BLE) or Glove80 (BLE). XREAL optional.
-- **Walking**: Shokz/Bose in ears + phone in pocket. Claude app voice for thinking, GitHub notifications for agent status. G2 only if purely personal context (no work discussions nearby).
+- **Walking**: Shokz/Bose in ears + phone in pocket. Claude app voice for thinking, GitHub notifications for agent status.
 - **Airplane**: iPad Pro + MX Keys Mini or Magic Keyboard. XREAL awkward with seatmates.
 - **Everywhere**: mosh + tmux to laptop/Mac over Tailscale. Device in hand is just a terminal.
 
