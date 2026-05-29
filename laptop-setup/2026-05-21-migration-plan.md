@@ -20,7 +20,7 @@ Two dimensions control what gets installed:
 - **CLI:** git, make, curl, tree, htop, tmux, jq, yq, watch, nmap, meld, tailscale, direnv, vim, zsh, fzf, zoxide, bitwarden-cli, keepassxc
 - **Languages:** Go, Python 3, gcc
 - **OpenShift/K8s:** oc, kubectl, kind, kustomize, helm, opm, subctl, openshift-install, gcloud, aws
-- **Dev:** gh, gemini-cli, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype, ansible-lint
+- **Dev:** gh, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype (verify ≥v0.104.1, CVE-2025-65965 credential leak in earlier versions), ansible-lint
 - **K8s code-gen:** controller-gen, client-gen, informer-gen, lister-gen, deepcopy-gen, applyconfiguration-gen, defaulter-gen
 - **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype. Note: gitlint dropped (unmaintained 3+ years, supply chain risk).
 
@@ -32,7 +32,7 @@ Two dimensions control what gets installed:
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
-- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xautolock (screen lock timer)
+- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock or xidlehook (screen lock timer — xautolock is unmaintained, dropped)
 - **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox), docker-credential-secretservice
 
 ### Dotfiles
@@ -50,7 +50,7 @@ Key custom settings to preserve:
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
 - **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 600` — one YubiKey tap opens a 10-minute multiplexed session for pushes.
-- **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xautolock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
+- **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xss-lock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately). Note: current config says `git_protocol: ssh` — must change to `https` during setup.
 - **gh hosts.yml**: `github.com`, user `dfarrell07`, `git_protocol: https`.
 
@@ -325,7 +325,7 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
     ├── packages/                   # install methods by source:
     │   #   dnf: system packages, gh (gh-cli repo), acli (acli repo), gcloud (google repo)
-    │   #   brew: python3, node, gemini-cli (+ mac-only: all CLI tools)
+    │   #   brew: python3, node (+ mac-only: all CLI tools). gemini-cli dropped (Google killing free API June 2026)
     │   #   binary download (/usr/local/bin): oc, kubectl, kind, kustomize, opm, openshift-install, grype, yq, helm
     │   #   go install: controller-gen, gofumpt, govulncheck, gci, *-gen, golangci-lint
     │   #   pip --user: anthropic, pydantic, rpm-lockfile-prototype
