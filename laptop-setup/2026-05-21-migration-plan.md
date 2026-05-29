@@ -36,7 +36,7 @@ Two dimensions control what gets installed:
 
 ### Dotfiles
 
-**All machines:** gitconfig, vimrc, tmux.conf, ssh config, gh CLI configs
+**All machines:** gitconfig (+ conditional include files: `~/.config/git/config-work`, `~/.config/git/config-personal`), vimrc, tmux.conf, ssh config, gh CLI configs, allowed signers file, pre-commit hook template
 **Jinja2 templates:** zshrc (brew paths, AWS profile, claude-work/claude-personal aliases). Note: Vertex AI vars must NOT be in zshrc — they go in the alias/direnv only.
 **Linux desktop:** zlogin, bashrc, htoprc, user-dirs.dirs, mimeapps.list, i3 config, i3status config, alacritty config
 **macOS:** aerospace.toml (i3-like tiling WM), macOS defaults (keyboard repeat, smart quotes off, Finder, Dock)
@@ -128,7 +128,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 `~/.claude-work/settings.json`:
 - Full permissions (`allow: *`) — YubiKey gate on push is the real safety net, not permission prompts. Claude can read/write/run freely but can't push without physical touch.
 - Move machine-specific config (model, MCP servers) to `settings.local.json` so `settings.json` can be shared/versioned.
-- Plugins: work instance gets shipyard, jira, release-management, claude-skills. Personal instance gets claude-skills only.
+- Plugins: work instance gets shipyard, jira, release-management, claude-skills. Personal instance gets claude-skills only. Install via `claude plugin add` with marketplace config in `settings.json` — the `claude` role templates `settings.json` with the `extraKnownMarketplaces` and `enabledPlugins` blocks per instance.
 - MCP servers: work instance gets Atlassian MCP. Personal instance gets none or different set.
 
 - **Container registry auth**: tokens from vault via credential helper (docker-credential-secretservice), deployed to `~/.config/containers/auth.json` with mode 0600 (work profile)
@@ -159,7 +159,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 keys vulnerable to EUCLEAK CVE-2024-45678). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
 - **Backup YubiKey**: separate key enrolled on a second YubiKey, stored securely. Prevents lockout if primary is lost/damaged.
 - **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644.
-- **GNOME Keyring conflict**: GNOME Keyring's SSH agent does not support FIDO2 keys — breaks signing and auth. Disable its SSH component; use OpenSSH's ssh-agent instead. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
+- **GNOME Keyring conflict**: GNOME Keyring's SSH agent does not support FIDO2 keys — breaks signing and auth. Disable by removing `/etc/xdg/autostart/gnome-keyring-ssh.desktop` (or `mkdir -p ~/.config/autostart && cp /etc/xdg/autostart/gnome-keyring-ssh.desktop ~/.config/autostart/ && echo Hidden=true >> ~/.config/autostart/gnome-keyring-ssh.desktop`). Use OpenSSH's ssh-agent instead. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
 - **Port knocking**: dropped. Unencrypted, replay-vulnerable. Tailscale replaces this — no open port to hide.
 
 ### Containers
@@ -265,9 +265,9 @@ Items that only apply to macOS (personal Mac desktop):
 │   ├── repos.yml                   # ~80 git repos
 │   └── vault.yml                   # ansible-vault encrypted: SSH keys, registry auth, env vars
 └── roles/
-    ├── common/                     # OS detection, profile setup, dirs, prerequisites
+    ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
-    ├── packages/                   # brew/dnf/apt, pip, go, binary downloads
+    ├── packages/                   # brew/dnf/apt, pip, go, binary downloads. CLI tool versions pinned in variables (oc_version, kubectl_version, etc.) — update by changing the variable, re-run playbook
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
     ├── git_repos/                  # clone repos, add fork remotes, profile filters
