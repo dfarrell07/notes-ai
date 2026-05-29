@@ -20,7 +20,7 @@ Two dimensions control what gets installed:
 - **CLI:** git, make, curl, tree, htop, tmux, jq, yq, watch, nmap, meld, tailscale, direnv, vim, zsh, fzf, zoxide, bitwarden-cli, keepassxc
 - **Languages:** Go, Python 3, gcc
 - **OpenShift/K8s:** oc, kubectl, kind, kustomize, helm, opm, subctl, openshift-install, gcloud, aws
-- **Dev:** gh, gemini-cli, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype
+- **Dev:** gh, gemini-cli, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype, ansible-lint
 - **K8s code-gen:** controller-gen, client-gen, informer-gen, lister-gen, deepcopy-gen, applyconfiguration-gen, defaulter-gen
 - **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype. Note: gitlint dropped (unmaintained 3+ years, supply chain risk).
 
@@ -32,7 +32,8 @@ Two dimensions control what gets installed:
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
-- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts
+- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xautolock (screen lock timer)
+- **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox), docker-credential-secretservice
 
 ### Dotfiles
 
@@ -58,7 +59,7 @@ From ansible-vault. Two YubiKey keys per device:
 
 Both public keys uploaded to GitHub (auth key as Authentication Key, signing key as Signing Key). Red Hat git key encrypted in vault (work profile only). Allowed signers file at `~/.config/git/allowed_signers`.
 
-### Git Repos (~80)
+### Git Repos (~114)
 
 All repos under `~/src/` with URL-mirroring layout. GitHub repos at `<org>/<repo>`, internal repos prefixed by short host name:
 
@@ -73,8 +74,12 @@ All repos under `~/src/` with URL-mirroring layout. GitHub repos at `<org>/<repo
 
 Defined in `repos.yml` with url, dest, category, enabled, optional extra_remotes. Cloned with `update: false`. Fork remotes added idempotently. VPN-dependent repos use `failed_when: false`. Filter by category: `-e repo_category=ovnk`.
 
-Categories: personal, bpfman, downstream, konflux, ovnk, cncf.
-Work profile default: all. Personal profile default: personal + ovnk + cncf.
+Categories: personal, bpfman, downstream, konflux, ovnk, cncf, misc.
+Work profile default: all (except disabled). Personal profile default: personal + ovnk + cncf.
+Disabled (do not clone): dependent-issues, ipset-go, Huberman-Lab-Podcast-Transcripts.
+Fork remotes: naming convention `dfarrell_<shortname>` (e.g. `dfarrell_op`, `dfarrell_lh`, `dfarrell_subm`).
+
+Full repo list must be populated in `repos.yml` during implementation phase 4. Currently 114 repos across: submariner-io (14), stolostron (8), konflux (14), ovnk (37), openshift (misc, 4), cncf (7), personal (8), bpfman (6), misc/disabled (16).
 
 ### Third-Party RPM Repos (dnf-based OS only)
 
@@ -568,7 +573,7 @@ See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementatio
 - `podman login registry.redhat.io` (also brew.registry, stage.registry)
 - Red Hat entitlements in `/etc/pki/entitlement/*.pem` — needed for RPM lockfile updates. RHEL CSB should have these pre-provisioned; Fedora needs `subscription-manager`.
 - `gcloud auth login` + `gcloud auth application-default login`
-- `acli` login (8 configs)
+- `acli` login — 8 config files in `~/.config/acli/`: admin, assets, brie, confluence, global_auth, global, jira, rovodev
 - Kerberos ticket (`kinit`)
 - Docker/Podman registry login refresh (when tokens expire)
 
