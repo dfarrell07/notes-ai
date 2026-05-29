@@ -50,10 +50,13 @@ Key custom settings to preserve:
   # Claude Code in tmux (always — sessions survive disconnects)
   cw() {  # Claude Work — creates/attaches tmux session named after current dir
     local s="work-${PWD##*/}"
-    tmux new-session -As "$s" "CLAUDE_CONFIG_DIR=~/.claude-work \
-      CLAUDE_CODE_USE_VERTEX=1 ANTHROPIC_VERTEX_PROJECT_ID=itpc-gcp-hcm-pe-eng-claude \
-      CLOUD_ML_REGION=global claude; zsh"
+    tmux new-session -As "$s" "source ~/.config/claude/work-env && claude; zsh"
   }
+  # ~/.config/claude/work-env (mode 0600, deployed by Ansible, NOT in zshrc):
+  #   export CLAUDE_CONFIG_DIR=~/.claude-work
+  #   export CLAUDE_CODE_USE_VERTEX=1
+  #   export ANTHROPIC_VERTEX_PROJECT_ID=itpc-gcp-hcm-pe-eng-claude
+  #   export CLOUD_ML_REGION=global
   ccp() {  # Claude Code Personal (not `cp` — shadows copy command)
     # Guard: prevent sending work code through personal Anthropic account
     if [[ "$PWD" == */src/openshift/* || "$PWD" == */src/submariner-io/* || "$PWD" == */src/stolostron/* || "$PWD" == */src/code.engineering/* || "$PWD" == */src/gitlab.cee/* ]]; then
@@ -161,9 +164,8 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **fwupd**: `fwupdmgr get-updates && fwupdmgr update` in system role. UEFI/Thunderbolt/NVMe firmware updates.
 - **Outbound firewall (Linux)**: install OpenSnitch (`dnf install opensnitch`) for per-process outbound filtering (Linux equivalent of LuLu on Mac). Catches compromised MCP servers, supply chain attacks phoning home.
 - **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is world-listable.
-- **Lid close + lock**: `HandleLidSwitch=lock` in logind.conf (not `ignore` — ignore prevents suspend but also prevents lock). Or add lid event to xss-lock/i3lock trigger.
 - **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
-- **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
+- **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
 - **Services**: fail2ban, libvirtd, cups, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand)
 - **Virtualization**: libvirt, qemu-kvm
@@ -405,6 +407,36 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
 
 **Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
 
+**Implementation details for Ansible:**
+```yaml
+# ansible.cfg
+[defaults]
+become = false
+vault_identity_list = critical@~/.vault_pass_critical, infra@~/.vault_pass_infra, dev@~/.vault_pass_dev
+stdout_callback = yaml
+collections_paths = ./collections
+roles_path = ./roles
+
+# default.config.yml (Geerling pattern — shipped defaults)
+profile: work              # override in config.yml (gitignored)
+install_docker: false       # per-feature booleans
+install_expressvpn: false   # renamed mullvad/protonvpn
+
+# Profile gating pattern in roles:
+# roles/redhat/tasks/main.yml
+- name: Deploy CA certs
+  ansible.builtin.copy: ...
+  when: profile == 'work'
+
+# OS gating pattern:
+- name: Install i3
+  ansible.builtin.dnf: ...
+  when: ansible_os_family == 'RedHat' or ansible_os_family == 'Fedora'
+
+# Tags match Makefile targets:
+# site.yml roles use tags: [dotfiles], [packages], [repos], [ssh], [desktop], [system], [redhat], [cloud], [distrobox], [claude]
+```
+
 **File structure:**
 ```
 ~/laptop-setup/
@@ -418,7 +450,7 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
 │   ├── preflight.sh                # Pre-flight checks (YubiKey, vault, network)
 │   ├── smoke-test.sh               # Post-run verification
 │   └── auth-guide.sh               # Interactive auth step guidance
-├── ansible.cfg                     # become: false default, vault password path
+├── ansible.cfg                     # become: false, vault_identity_list, yaml stdout callback
 ├── Makefile
 ├── site.yml                        # two plays: system (become: true) + user (become: false)
 ├── requirements.yml                # pinned collection versions (community.general, containers.podman)
