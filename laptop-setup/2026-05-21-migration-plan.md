@@ -17,7 +17,7 @@ Two dimensions control what gets installed:
 ### Packages
 
 **Core (all machines):**
-- **CLI:** git, make, curl, tree, htop, tmux, jq, yq, watch, nmap, meld, tailscale, direnv, vim, zsh, fzf, zoxide, bitwarden-cli, keepassxc
+- **CLI:** git, make, curl, tree, htop, tmux, mosh, jq, yq, watch, nmap, meld, tailscale, direnv, vim, zsh, fzf, zoxide, bitwarden-cli, keepassxc
 - **Languages:** Go, Python 3, gcc
 - **OpenShift/K8s:** oc, kubectl, kind, kustomize, helm, opm, subctl, openshift-install, gcloud, aws
 - **Dev:** gh, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype (verify ≥v0.104.1, CVE-2025-65965 credential leak in earlier versions), ansible-lint
@@ -45,7 +45,7 @@ Two dimensions control what gets installed:
 Key custom settings to preserve:
 - **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases, `zstyle ':omz:update' mode auto` (prevent falling behind on security fixes). Remove: `github` plugin (wraps deprecated `hub`, dead weight), Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
 - **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap. Conditional includes for per-directory email: `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email. Prevents committing with wrong identity.
-- **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste.
+- **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste, `monitor-activity on`, `visual-activity on` (alerts when background Claude sessions produce output).
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
@@ -521,14 +521,31 @@ All keyboard devices on Tailscale for SSH access. Phone stays off (GitHub Issues
 
 Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no Tailscale creds).
 
-### Cross-Machine Work
+### Cross-Device Patterns
 
-- GitHub is the bridge — push from one, pull/clone on the other
-- Cloud sessions (personal account) can work on any GitHub repo from any device
-- Remote Control from iPad/Pixelbook → Mac desktop sessions (Pro plan)
-- SSH from iPad/Pixelbook → work laptop (Tailscale + YubiKey or Tailscale SSH)
-- GitHub Issues from phone → work laptop (async task queue)
-- Dispatch from phone/iPad → Mac desktop (Claude app)
+**Core principles:**
+- **tmux everywhere** — every Claude Code session that might outlast your attention starts in tmux. Decouples the session from any specific device or connection.
+- **mosh over SSH for mobile** — iPad and Pixelbook use mosh (UDP, survives sleep/network switches). Install `mosh-server` on laptop and Mac. Blink Shell supports mosh natively.
+- **GitHub as durable output** — PRs, issues, review comments are the right place for Claude's output when you need cross-device visibility. Push notifications reach every device.
+- **Phone is for capture, not execution** — dictate specs, create issues, receive notifications. Don't code on it.
+- **Mac desktop is the always-on anchor** — overnight automation (cron), Remote Control server, Dispatch target, fallback when laptop is asleep.
+
+**Workflow scenarios:**
+- **Couch/iPad**: Blink Shell → mosh to laptop → tmux attach → `/review` a PR. Detach when done, review continues.
+- **Coffee shop/Pixelbook**: Local Claude Code in Crostini for spec writing. Remote Control via Chrome to Mac for implementation.
+- **Walking/phone**: Voice → Claude app → format as GitHub Issue → Dispatch to Mac or pickup later.
+- **Desk/laptop**: Multiple tmux windows, parallel Claude sessions (feature + review + tests).
+- **Traveling/iPad only**: mosh to laptop for debugging. Remote Control to Mac as fallback. Claude app for triage.
+- **Device handoff**: tmux is the universal session persistence. SSH/mosh from new device, `tmux attach`.
+- **Overnight**: Cron on Mac desktop runs nightly reviews, posts results as PR comments. GitHub notifications reach phone.
+
+**Notifications:** Claude output → GitHub (PRs, comments) → push notifications to phone/iPad. tmux `monitor-activity` for terminal-based alerts. Slack webhooks for non-GitHub automation.
+
+**Session persistence:**
+- iPad sleep + mosh → auto-resumes (best option)
+- iPad sleep + SSH → reconnect, `tmux attach`
+- Pixelbook sleep → Crostini survives, reattach tmux locally
+- Mac desktop → always running, never sleeps
 
 ### Known Limitations
 
