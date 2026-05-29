@@ -36,21 +36,27 @@ Two dimensions control what gets installed:
 
 ### Dotfiles
 
-**All machines:** gitconfig, vimrc, ssh config, gh CLI configs
+**All machines:** gitconfig, vimrc, tmux.conf, ssh config, gh CLI configs
 **Jinja2 templates:** zshrc (brew paths, AWS profile, claude-work/claude-personal aliases). Note: Vertex AI vars must NOT be in zshrc — they go in the alias/direnv only.
 **Linux desktop:** zlogin, bashrc, htoprc, user-dirs.dirs, mimeapps.list, i3 config, i3status config, alacritty config
+**macOS:** aerospace.toml (i3-like tiling WM), macOS defaults (keyboard repeat, smart quotes off, Finder, Dock)
 
 Key custom settings to preserve:
 - **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/github/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases. Remove: Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
-- **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch) — Claude Code can read/clone/pull freely but pushing needs physical approval.
+- **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap.
+- **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
-- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only).
-- **i3 config**: Alt modifier, PulseAudio volume keys, brightness keys, dmenu, nm-applet autostart. Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
+- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 600` — one YubiKey tap opens a 10-minute multiplexed session for pushes.
+- **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xautolock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately).
 
 ### SSH Keys
 
-From ansible-vault. YubiKey public keys deployed; hardware-bound private stubs print setup instructions. Red Hat git key encrypted in vault (work profile only).
+From ansible-vault. Two YubiKey keys per device:
+- **Auth key** (touch required): ed25519-sk with `-O verify-required`. Used for SSH login and git push.
+- **Signing key** (no touch): ed25519-sk with `-O no-touch-required`. Used for git commit signing. YubiKey must be plugged in but no tap needed — Claude Code can sign commits automatically.
+
+Both public keys uploaded to GitHub (auth key as Authentication Key, signing key as Signing Key). Red Hat git key encrypted in vault (work profile only). Allowed signers file at `~/.config/git/allowed_signers`.
 
 ### Git Repos (~80)
 
@@ -136,7 +142,8 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets.
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600. Note: Vertex AI vars are NOT in zshrc — they live in direnv `.envrc` and claude-work alias only.
-- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Grep for `password:`, `token:`, `BEGIN OPENSSH` in pre-commit hook.
+- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Pre-commit hook greps for `password:`, `token:`, `BEGIN OPENSSH` — deployed by the dotfiles role as a git template hook (`git config --global init.templateDir ~/.config/git/template`, hook in `~/.config/git/template/hooks/pre-commit`).
+- **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
 ### Network
 
@@ -152,6 +159,7 @@ Each instance gets isolated: settings, credentials, session history, MCP servers
 - **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 keys vulnerable to EUCLEAK CVE-2024-45678). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
 - **Backup YubiKey**: separate key enrolled on a second YubiKey, stored securely. Prevents lockout if primary is lost/damaged.
 - **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644.
+- **GNOME Keyring conflict**: GNOME Keyring's SSH agent does not support FIDO2 keys — breaks signing and auth. Disable its SSH component; use OpenSSH's ssh-agent instead. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
 - **Port knocking**: dropped. Unencrypted, replay-vulnerable. Tailscale replaces this — no open port to hide.
 
 ### Containers
@@ -208,6 +216,28 @@ See User Environment section for setup details. Security-critical points:
 - All `shell:`/`command:` tasks have `changed_when:` and idempotency guards (`creates:`, `when:`).
 - `requirements.yml` pins all external collection versions to prevent supply chain drift.
 
+## macOS-Specific
+
+Items that only apply to macOS (personal Mac desktop):
+
+**Packages (brew cask):** alacritty, google-chrome, aerospace (i3-like tiling WM), bitwarden, keepassxc, slack, docker (if needed)
+
+**YubiKey FIDO2 fix:** macOS built-in OpenSSH lacks FIDO2 support. Must install `brew install openssh libfido2 ssh-askpass`. Ensure Homebrew's ssh is first in PATH. Disable Apple's launchd ssh-agent (doesn't support FIDO2) — use Homebrew's ssh-agent instead.
+
+**Window management:** AeroSpace (`brew install --cask nikitabobko/tap/aerospace`) — i3-inspired tiling WM, TOML config, no SIP disable needed. Config at `~/.config/aerospace/aerospace.toml`.
+
+**macOS defaults:** deploy via `community.general.osx_defaults` — key repeat enabled, smart quotes/dashes off, Finder shows extensions and full path, screenshots to ~/Downloads, screen lock immediately on sleep.
+
+**Firewall:** `socketfilterfw --setglobalstate on`, stealth mode on. Works per-application, not per-port like firewalld.
+
+**Services (launchd):** systemd units become launchd plists in `~/Library/LaunchAgents/`. Needed for: Claude Code Remote Control server, task queue poller, brew autoupdate.
+
+**Brew autoupdate:** `brew tap domt4/autoupdate && brew autoupdate start 43200 --upgrade --cleanup` — equivalent of dnf-automatic.
+
+**Registry credential helper:** `docker-credential-osxkeychain` instead of `docker-credential-secretservice`.
+
+**Manual (cannot automate):** TCC permissions — Accessibility (AeroSpace), Full Disk Access (terminal), App Management (brew autoupdate). Requires GUI interaction.
+
 ## Design Decisions
 
 - **Ansible** — one tool for packages, dotfiles, services, secrets
@@ -248,7 +278,7 @@ See User Environment section for setup details. Security-critical points:
     ├── desktop/                    # i3, Alacritty (Linux desktop), zsh (all)
     ├── system/                     # firewall, kernel modules, services (Linux only)
     ├── distrobox/                  # Distrobox + Fedora container (RHEL CSB)
-    └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal)
+    └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal), task queue poller (systemd timer + script)
 ```
 
 ## Makefile Targets
@@ -274,7 +304,9 @@ Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit
 ## Bootstrap (fresh machine)
 
 **Fedora/RHEL:** `sudo dnf install ansible-core git` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`
-**macOS:** `xcode-select --install` → install Homebrew → `brew install ansible git` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`
+**macOS:** `xcode-select --install` → install Homebrew → `brew install ansible git openssh libfido2` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`. Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2 YubiKey keys). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
+
+Vault password bootstrap: install Bitwarden CLI first (`brew install bitwarden-cli` or `dnf install bitwarden-cli`), `bw login`, retrieve vault password, write to `~/.vault_pass`. Then `make all` can decrypt everything else.
 
 ## Implementation Phases
 
@@ -327,8 +359,8 @@ Phone side:
 - Optional: work or personal Claude app to help compose issue specs (GitHub connector read-only)
 
 Laptop side:
-- Cron or systemd timer (every 2-3 min): `gh issue list --state open --json number,title,body`, run `claude -p` with safety flags per issue, open PR, comment results
-- Safety: `--allowedTools` whitelist, `--max-turns`, `--max-budget-usd` per task
+- Systemd timer (every 2 min, oneshot prevents overlap) — see Task Queue Repo section for full design
+- Safety: `--allowedTools` whitelist per repo, `--max-turns 50`, `--max-budget-usd 5.00`, 30 min timeout
 
 Security:
 - No SSH key on phone, no Tailscale needed
@@ -412,10 +444,24 @@ RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation i
 Private GitHub repo for phone-to-laptop async task communication via Issues and PRs.
 
 - Private repo, single user access only.
-- Phone creates Issues (specs/plans). Laptop picks up open Issues, does work, opens PRs.
 - Phone GitHub token scoped to this repo only (fine-grained PAT) — limits blast radius if phone is compromised.
-- Laptop polls for open issues via cron every 2-3 minutes.
-- PRs require human review/merge — no unreviewed code lands on main.
+
+**Issue format:**
+```
+repo: submariner-operator
+<spec/plan in body>
+```
+`repo:` line maps to local paths via a config file (e.g. `submariner-operator` → `~/src/submariner-io/submariner-operator`).
+
+**State machine via labels:** `queued` → `processing` → `done` / `failed`. Failed issues stay open with an error comment (exit code, stderr, branch name). Retry: remove `failed`, add `queued`.
+
+**Poller:** systemd timer (every 2 min after completion, `Type=oneshot` prevents overlap). Processes issues sequentially, oldest first. Branch naming: `claude/<issue-number>-<slug>`. Opens PR linking the issue, comments with progress.
+
+**Safety:** `--allowedTools` whitelist per repo, `--max-turns 50`, `--max-budget-usd 5.00`, `timeout 1800` (30 min). Systemd adds `MemoryMax=4G`, `CPUQuota=80%`.
+
+**PRs require human review/merge** — no unreviewed code lands on main.
+
+See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementation design.
 
 ## Manual Setup
 
