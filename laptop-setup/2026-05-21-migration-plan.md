@@ -606,7 +606,7 @@ Neither app replaces the git task queue for sending work to Claude Code.
 - **Local Claude Code**: install in Crostini (`npm install -g @anthropic-ai/claude-code`) with Anthropic Pro for light personal work. 8GB RAM limits heavy use.
 - **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use GPG/PIV workaround or Tailscale SSH (avoids key management).
 - **Browser-based dev**: GitHub Codespaces, code-server for VS Code workflows
-- **Keep ChromeOS** — full Linux install not worth the trade-offs on 8GB/2017 hardware. **Confirm Developer Mode is disabled** (Crostini doesn't require it). AUE August 2027 — plan migration. **If AUE has already passed or is imminent, remove from Tailscale mesh** — unpatched device on trusted network is a lateral movement risk. Replace or use as untrusted web-only kiosk.
+- **Keep ChromeOS** — full Linux install not worth the trade-offs on Pixelbook Go (2019, 8GB). **Confirm Developer Mode is disabled** (Crostini doesn't require it). AUE June 2028 — plan migration. **If AUE has already passed or is imminent, remove from Tailscale mesh** — unpatched device on trusted network is a lateral movement risk. Replace or use as untrusted web-only kiosk.
 
 ### Tailscale Mesh
 
