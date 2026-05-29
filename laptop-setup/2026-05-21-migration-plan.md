@@ -103,7 +103,7 @@ Key custom settings to preserve:
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
-- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 600` — one YubiKey tap opens a 10-minute multiplexed session for pushes.
+- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 60` — one YubiKey tap opens a 60-second multiplexed session (shorter than 600s to limit socket hijack window). `~/.ssh/sockets/` mode 0700.
 - **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xss-lock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately). Note: current config says `git_protocol: ssh` — must change to `https` during setup.
 - **gh hosts.yml**: `github.com`, user `dfarrell07`, `git_protocol: https`.
@@ -294,7 +294,7 @@ Mitigations:
 - Git `core.fsmonitor` in crafted repos executes code when Claude runs `git status`.
 
 **Mitigations (deploy via Ansible):**
-- Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass)`
+- Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass*)`, `Read(~/.config/gh/**)`, `Read(~/.config/gcloud/**)`, `Read(~/.config/acli/**)`, `Read(~/.config/containers/auth.json)`, `Read(~/.claude-work/**)`, `Read(~/.claude-personal/**)`
 - `git config --global core.hooksPath ~/.config/git/hooks` — override per-repo hooks
 - `git config --global core.fsmonitor false` — prevent fsmonitor code execution
 - Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc before running Claude in any new repo
@@ -431,6 +431,8 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
     │   #   curl to ~/.local/bin: subctl, distrobox
     │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xss-lock
     │   #   versions pinned in variables — update by changing variable, re-run
+    │   #   ALL binary downloads verified: SHA256 checksums in vars, Ansible get_url checksum= param
+    │   #   cosign verify-blob for tools that publish Sigstore signatures (kubectl, grype)
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
     ├── git_repos/                  # clone repos, add fork remotes, profile filters
@@ -604,7 +606,7 @@ Neither app replaces the git task queue for sending work to Claude Code.
 - **Local Claude Code**: install in Crostini (`npm install -g @anthropic-ai/claude-code`) with Anthropic Pro for light personal work. 8GB RAM limits heavy use.
 - **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use GPG/PIV workaround or Tailscale SSH (avoids key management).
 - **Browser-based dev**: GitHub Codespaces, code-server for VS Code workflows
-- **Keep ChromeOS** — full Linux install not worth the trade-offs on 8GB/2017 hardware. **Confirm Developer Mode is disabled** (Crostini doesn't require it — Developer Mode disables verified boot and encryption). AUE August 2027 — plan migration.
+- **Keep ChromeOS** — full Linux install not worth the trade-offs on 8GB/2017 hardware. **Confirm Developer Mode is disabled** (Crostini doesn't require it). AUE August 2027 — plan migration. **If AUE has already passed or is imminent, remove from Tailscale mesh** — unpatched device on trusted network is a lateral movement risk. Replace or use as untrusted web-only kiosk.
 
 ### Tailscale Mesh
 
@@ -618,7 +620,7 @@ All keyboard devices on Tailscale for SSH access. Phone stays off (GitHub Issues
 | Pixelbook | Yes (Android app) | Yes (Crostini) | Yes (Crostini) | Client (Chrome) |
 | Pixel phone | No | No | No | No (GitHub Issues) |
 
-Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no Tailscale creds).
+Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACLs**: segment by trust tier — laptop is `tag:trusted` (full access), iPad/Pixelbook are `tag:casual` (SSH to laptop/Mac only, no inter-casual access), Mac is `tag:server` (accepts SSH, serves Remote Control). 90-day key expiry. Revoke lost devices immediately from admin console.
 
 ### Cross-Device Patterns
 
@@ -762,7 +764,8 @@ podman run --rm --network=slirp4netns --read-only \
   -p "$PROMPT" --allowedTools "$TOOLS" --max-turns 50
 ```
 - Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds
-- Network: `slirp4netns` (Podman default for rootless). Primary defense is filesystem isolation, not network — container has no credentials to exfiltrate. PR/issue comments remain a channel regardless of network policy.
+- API key: use `podman secret create` or `--env-file` with mode 0600 — NOT `-e ANTHROPIC_API_KEY` (visible in `/proc/<pid>/cmdline` to any local process)
+- Network: `slirp4netns` (Podman default for rootless). Primary defense is filesystem isolation, not network.
 - Repo-scoped deploy key as sole credential (not user's gh auth)
 - Separate PAT for poller (reads issues) vs executor (pushes code)
 - Container destroyed after each task
