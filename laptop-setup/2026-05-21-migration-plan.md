@@ -631,23 +631,30 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no 
 
 ### Hardware Options (portable coding rigs)
 
+**Current gear:** ZSA Moonlander (custom cables, daily driver), Shokz (sport/safety).
+
 **AR glasses:**
-- **Even Realities G2** ($599) — smart glasses with Claude Code integration (`claude-code-g2`). HUD shows agent status (Thinking/Executing/Listening). Tap ring to approve, hold ring to speak instructions via Whisper. 36g, looks like normal glasses, 2-day battery. Best for monitoring Claude while mobile — you can't read code on it, but you can steer an autonomous agent.
-- **XREAL One Pro** ($599) — virtual monitor via USB-C to iPad/phone. 1080p per eye, readable for terminal text. 2-4 hour sessions. Electrochromic dimming for shade. Plug into iPad → Blink Shell → mosh to laptop → Claude in tmux. Not viable in direct sunlight or for full-day use.
+- **Even Realities G2** ($599 + R1 ring $249 + Rx lenses ~$159 = ~$1,050) — Claude Code HUD integration (`claude-code-g2`, `cc-g2`). Shows agent status (Thinking/Executing/Listening), tap ring to approve, hold ring for voice via Whisper. 36g, looks like normal glasses, 2-day battery, prescription lenses supported. No camera (privacy-safe). Best for monitoring agents while mobile. Can't read code — it's an ambient status display. Note: Chinese company, always-on mics, undisclosed cloud audio processing.
+- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — best XREAL for terminal text. 1920x1200/eye (16:10, more vertical lines), X1 chip (native 3DoF screen anchoring), 700 nits, electrochromic dimming, 82g. USB-C to iPad Pro or Pixel phone. Hub provides pass-through charging (near-mandatory for 1+ hour sessions). Readable for code at 14pt+ font. 2-4 hour comfortable sessions, not full-day. Better value than One Pro ($599) — sharper text due to tighter FOV.
 
-**Keyboards (for iPad/phone pairing):**
-- **Wireless Corne** (ZMK + nice!nano, ~$200 built) — 42-key split, Bluetooth, 200g, genuine pocket size. The only split ergonomic keyboard with BLE. Pairs with iPad, phone, Pixelbook. Steep learning curve (heavy layer use).
-- **Logitech MX Keys Mini** ($100) — compact, BLE, pairs with 3 devices. Not ergonomic but zero friction. Best for travel (airplane tray tables).
-- **ZSA Voyager** ($365) — best split travel keyboard, 217g per half. USB-C only (no Bluetooth) — works with laptop/Pixelbook, unreliable with iPad.
+**Keyboards:**
+- **Moonlander** (already owned) — works with iPad/phone via USB-C direct (recognized as USB HID). Disable RGB LEDs to avoid iPad power complaints. Tethered but functional. Primary desk keyboard.
+- **Glove80** ($399, recommended upgrade) — wireless Bluetooth 5.0, 80 keys (more than Moonlander), contoured key wells, ZMK, 5 BT device profiles. Pairs with laptop, iPad, phone, Pixelbook simultaneously. Best "upgrade from Moonlander" — more keys (easier transition), better ergonomics (sculpted wells), wireless. Not ultra-portable but fits in a backpack.
+- **Wireless Corne** (~$200 from Typeractive) — 42-key, BLE, 200g, pocket-sized. Travel-only keyboard. Steep adaptation from Moonlander (30 fewer keys). Best for coffee shop / park bench.
+- **Logitech MX Keys Mini** ($100) — airplane keyboard. Not ergonomic but fits on tray tables.
 
-**Voice interaction:**
-- Claude mobile app voice mode for thinking through problems (no code access, no terminal)
-- Voice for intent-level instructions ("fix the retry logic"), not syntax dictation
-- **Bose Ultra Open** or **Shokz OpenComm UC** — open-ear, good mic, all-day comfort
-- DIY pipeline possible: Whisper STT → Claude API → piper TTS. No polished product exists yet.
+**Voice:**
+- **Shokz** (already owned) — fine for voice, outdoor mic quality limited by wind
+- **Bose Ultra Open** (~$300, upgrade) — best open-ear audio quality for listening to Claude responses + good mic
+- **Shokz OpenComm UC** (~$160, upgrade) — boom mic version, better voice input than sport Shokz
+- Claude mobile app voice mode: intent-level instructions ("fix the retry logic"), not syntax. No terminal access.
 
-**The mobile coding rig:**
-iPad Pro (682g) + wireless Corne (200g) + XREAL glasses (84g) = ~1kg total. All compute is remote — mosh + tmux to laptop/Mac over Tailscale. Device in your hands is just a terminal.
+**The rigs:**
+- **Park bench**: iPad Pro + Moonlander (USB-C) + XREAL 1S. ~1.5kg. All compute remote.
+- **Coffee shop**: iPad Pro + Corne (BLE) or Glove80 (BLE). XREAL optional.
+- **Walking**: Even G2 on face + Shokz/Bose in ears + phone in pocket. Claude app voice for thinking, G2 HUD for agent status, tap ring to approve.
+- **Airplane**: iPad Pro + MX Keys Mini or Magic Keyboard. XREAL awkward with seatmates.
+- **Everywhere**: mosh + tmux to laptop/Mac over Tailscale. Device in hand is just a terminal.
 
 ### Known Limitations
 
