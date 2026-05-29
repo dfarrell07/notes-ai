@@ -149,7 +149,8 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **Kernel**: blacklist intel_vbtn. `kernel.yama.ptrace_scope=1` in sysctl (prevent cross-process memory reading). Enable Secure Boot in BIOS.
-- **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager
+- **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
+- **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
 - **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
 - **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
@@ -497,7 +498,7 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
 2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
 3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev`
-4. `make all` decrypts each vault tier. Shred temp files after.
+4. `make all` decrypts each vault tier. The skill's post-run phase auto-shreds vault password files (`shred -u ~/.vault_pass_*`). Alternative: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
 
 **Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
 
@@ -747,7 +748,7 @@ repo: submariner-operator
 
 **State machine via labels:** `queued` → `processing` → `done` / `failed`. Failed issues stay open with an error comment (exit code, stderr, branch name). Retry: remove `failed`, add `queued`.
 
-**Poller:** systemd timer (every 2 min after completion, `Type=oneshot` prevents overlap). Processes issues sequentially, oldest first. Branch naming: `claude/<issue-number>-<slug>`. Opens PR linking the issue, comments with progress.
+**Poller:** systemd timer (every 2 min after completion, `Type=oneshot` prevents overlap). Processes issues sequentially, oldest first. Branch naming: `claude/<issue-number>-<slug>`. Opens PR linking the issue, comments with progress. **Issue body passed via temp file to `claude -p --prompt-file`, never via shell argument** (prevents shell injection from crafted issue content). Poller authenticates with its own scoped PAT, not ambient `gh auth`.
 
 **Safety:** `--max-turns 50`, `--max-budget-usd 5.00`, `timeout 1800` (30 min). Systemd adds `MemoryMax=4G`, `CPUQuota=80%`.
 
@@ -793,6 +794,27 @@ See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementatio
 **Google Advanced Protection**: enroll both personal and work accounts. Requires security key for all logins. Strongest Google protection.
 
 **Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `shred -u export.csv`.
+
+**Key rotation schedule:**
+- GitHub PATs: 30-day expiry (enforced at creation), auto-revoke expired
+- Container registry tokens: refresh when they expire (manual, documented in acli/podman login)
+- SSH keys: rotate annually or on suspected compromise. Add new key to authorized_keys before removing old.
+- Ansible vault passwords: rotate on compromise or annually. `ansible-vault rekey` all files.
+- Tailscale node keys: 90-day expiry (set in admin console)
+- YubiKey HMAC secret: rotate only if key is compromised (requires re-encrypting critical vault)
+
+**Incident response:**
+- **Credential leak** (secret pushed to git): revoke immediately from any device, rotate affected credential, audit git log for exposure window, force-push to remove from history, notify if third-party data affected.
+- **Compromised machine**: power off (preserve RAM state if forensics needed), revoke all sessions from a DIFFERENT trusted device (phone → GitHub/Google/Bitwarden session revocation), rotate all credentials that were on that machine, rebuild from Ansible.
+- **Lost YubiKey**: revoke the lost key's passkeys from every service (login with backup YubiKey), re-enroll new replacement key. The backup YubiKey keeps you operational during this process.
+- **Recovery device chain**: phone can revoke GitHub/Google sessions via their mobile apps without needing any other device. This is the "break glass" device.
+
+**Recovery circular dependency prevention:**
+- Bitwarden recovery code → KeePassXC on encrypted USB (memorized password)
+- KeePassXC vault password → memorized (Diceware, one of 4 memorized passwords)
+- If KeePassXC password forgotten → printed recovery codes in fireproof safe (physical)
+- If both YubiKeys lost → printed HMAC hex secret in safe → configure new keys → re-derive vault passwords
+- **Test the rebuild**: periodically attempt full environment reconstruction on a VM using only backup mechanisms.
 
 ## Manual Setup
 
