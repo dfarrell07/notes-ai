@@ -487,11 +487,48 @@ Two apps, different accounts, different capabilities:
 
 Neither app replaces the git task queue for sending work to Claude Code.
 
+### iPad Pro (thin client + Claude app)
+
+- **Primary role**: portable thin client for steering Claude Code remotely + Claude app for voice/connectors
+- **Remote Control**: `claude.ai/code` in Safari → steer Mac desktop sessions. Pro plan, full features.
+- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. YubiKey USB-C works for SSH auth.
+- **Claude app**: work account (managed, Jira/GitHub connectors) + personal account (full connectors, voice mode)
+- **GitHub app**: issue creation, PR review (same as phone but better with keyboard + larger screen)
+- **Dispatch**: send tasks from Claude iOS app to Mac Desktop app
+- **No local Claude Code** — iPad runs iPadOS, not practical for Node.js
+
+### Pixelbook (lightweight dev + thin client)
+
+- **Primary role**: thin client via browser + light local dev in Crostini
+- **Remote Control**: `claude.ai/code` in Chrome → steer Mac desktop sessions. Best thin-client experience.
+- **SSH**: Crostini terminal + Tailscale (Android app, Baguette networking) → mosh/tmux to work laptop
+- **Local Claude Code**: install in Crostini (`npm install -g @anthropic-ai/claude-code`) with Anthropic Pro for light personal work. 8GB RAM limits heavy use.
+- **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use GPG/PIV workaround or Tailscale SSH (avoids key management).
+- **Browser-based dev**: GitHub Codespaces, code-server for VS Code workflows
+- **Keep ChromeOS** — full Linux install not worth the trade-offs on 8GB/2017 hardware
+
+### Tailscale Mesh
+
+All keyboard devices on Tailscale for SSH access. Phone stays off (GitHub Issues only).
+
+| Device | Tailscale | SSH to laptop | SSH to Mac | Remote Control |
+|---|---|---|---|---|
+| Linux laptop | Yes | — | Yes | No (Vertex) |
+| Mac desktop | Yes | Yes | — | Server |
+| iPad Pro | Yes | Yes (Blink) | Yes (Blink) | Client (Safari) |
+| Pixelbook | Yes (Android app) | Yes (Crostini) | Yes (Crostini) | Client (Chrome) |
+| Pixel phone | No | No | No | No (GitHub Issues) |
+
+Tailnet Lock enabled. Phone excluded to minimize attack surface (no SSH key, no Tailscale creds).
+
 ### Cross-Machine Work
 
 - GitHub is the bridge — push from one, pull/clone on the other
-- Cloud sessions (personal account) can work on any GitHub repo
-- SSH to work machine for anything that needs Vertex billing or local-only repos
+- Cloud sessions (personal account) can work on any GitHub repo from any device
+- Remote Control from iPad/Pixelbook → Mac desktop sessions (Pro plan)
+- SSH from iPad/Pixelbook → work laptop (Tailscale + YubiKey or Tailscale SSH)
+- GitHub Issues from phone → work laptop (async task queue)
+- Dispatch from phone/iPad → Mac desktop (Claude app)
 
 ### Known Limitations
 
