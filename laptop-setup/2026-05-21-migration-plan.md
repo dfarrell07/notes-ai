@@ -46,10 +46,13 @@ Key custom settings to preserve:
 - **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, aliases (`gv`, `gi`, `ping`/`pingg`/`ping8`), claude-work/claude-personal aliases, `zstyle ':omz:update' mode auto` (prevent falling behind on security fixes). Remove: `github` plugin (wraps deprecated `hub`, dead weight), Vertex AI exports (move to alias/direnv), stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
 - **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap. Conditional includes for per-directory email: `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email. Prevents committing with wrong identity.
 - **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste.
+- **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
+- **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
 - **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 600` — one YubiKey tap opens a 10-minute multiplexed session for pushes.
 - **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xautolock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
-- **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately).
+- **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately). Note: current config says `git_protocol: ssh` — must change to `https` during setup.
+- **gh hosts.yml**: `github.com`, user `dfarrell07`, `git_protocol: https`.
 
 ### SSH Keys
 
@@ -356,15 +359,36 @@ Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit
 
 ## Bootstrap (fresh machine)
 
-**Fedora/RHEL:** `sudo dnf install ansible-core git` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`
-**macOS:** `xcode-select --install` → install Homebrew → `brew install ansible git openssh libfido2` → clone repo → `ansible-galaxy install -r requirements.yml` → `make all`. Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2 YubiKey keys). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
+**Fedora/RHEL:**
+```bash
+sudo dnf install ansible-core git ykpers  # ykpers provides ykchalresp
+git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
+cd ~/laptop-setup
+ansible-galaxy collection install -r requirements.yml
+# Get vault passwords (see below)
+make all
+```
 
-Vault password bootstrap:
-1. Install `ykman` / `ykchalresp` (in Fedora repos, `brew install ykman` on Mac)
-2. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
-3. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
-4. Install Bitwarden (official binary, NOT npm — npm had 90-min trojan in April 2026) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev`
-5. `make all` decrypts each vault tier with its corresponding password. Shred temp files after.
+**macOS:**
+```bash
+xcode-select --install
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install ansible git openssh libfido2 ykman
+git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
+cd ~/laptop-setup
+ansible-galaxy collection install -r requirements.yml
+# Get vault passwords (see below)
+make all
+```
+Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
+
+**Vault password retrieval** (before `make all`):
+1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
+2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
+3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev`
+4. `make all` decrypts each vault tier. Shred temp files after.
+
+**Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
 
 ## Implementation Phases
 
