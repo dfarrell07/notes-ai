@@ -85,6 +85,7 @@ acli, docker-ce, expressvpn, gh-cli, google-chrome, google-cloud-sdk, rpmfusion 
 Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
+- **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **Kernel**: blacklist intel_vbtn
 - **Lid close**: `HandleLidSwitch=ignore`, `HandleLidSwitchExternalPower=ignore` in `/etc/systemd/logind.conf` — no suspend on lid close
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
@@ -233,7 +234,9 @@ Mitigations:
 - Sudo password from vault, not hardcoded.
 - All module names use FQCN (`ansible.builtin.copy`, not `copy`).
 - All `shell:`/`command:` tasks have `changed_when:` and idempotency guards (`creates:`, `when:`).
-- `requirements.yml` pins all external collection versions to prevent supply chain drift.
+- `requirements.yml` pins all external collection versions to prevent supply chain drift. Note: `ansible-galaxy install` has no integrity verification by default — run `ansible-galaxy collection verify` after install.
+- **Ansible repo integrity**: commit signing enforced via branch protection. Consider `ansible-sign` for GPG project-level verification before `make all` runs on a fresh machine.
+- **Audit logging**: Claude Code logs full JSONL transcripts to `~/.claude/projects/`. Enable OpenTelemetry for structured monitoring: `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_LOGS_EXPORTER=console`, `OTEL_LOG_TOOL_DETAILS=1`. Add auditd rules for sensitive file reads (`~/.ssh/`, `~/.aws/`, `~/.kube/`, `~/.vault_pass`).
 
 ## macOS-Specific
 
@@ -482,7 +485,7 @@ See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 Private GitHub repo for phone-to-laptop async task communication via Issues and PRs.
 
 - Private repo, single user access only.
-- Phone GitHub token scoped to this repo only (fine-grained PAT) — limits blast radius if phone is compromised.
+- Phone GitHub token: fine-grained PAT, Issues:Read/Write only, scoped to this single repo. No Contents permission. 30-day expiry. Never edit PATs via GitHub UI (bug silently reverts scope to all repos) — delete and recreate instead.
 
 **Issue format:**
 ```
