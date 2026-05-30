@@ -240,7 +240,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 ### Network
 
 - **Firewall**: `public` zone, not FedoraWorkstation (which opens 1025-65535). Default-DROP policy. Allow only SSH (non-default port) + specific dev ports as needed. Allow essential ICMP (destination-unreachable, time-exceeded, echo-reply) — full stealth breaks Path MTU Discovery.
-- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. Enable **Tailnet Lock** (free on Personal plan) — prevents rogue node injection even if Tailscale's coordination server is compromised. DERP relays are end-to-end encrypted (they forward WireGuard ciphertext, never hold private keys). Headscale (self-hosted) not needed for 2-3 devices — Tailnet Lock provides equivalent security without infrastructure burden.
+- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. Enable **Tailnet Lock** (free on Personal plan) — prevents rogue node injection even if Tailscale's coordination server is compromised. DERP relays are end-to-end encrypted. Note: Tailnet Lock does NOT protect DNS mappings — a compromised coordination server can spoof MagicDNS. Fix: `tailscale set --accept-dns=false`, configure split DNS manually (only `*.ts.net` → 100.100.100.100, everything else → Cloudflare DoT). MagicDNS conflicts with `DNSOverTLS=yes` if both claim the default DNS route.
 - **VPN isolation**: never run personal VPN (Mullvad/ProtonVPN) and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
 
 ### SSH
@@ -312,7 +312,8 @@ Mitigations:
 - Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass*)`, `Read(~/.config/gh/**)`, `Read(~/.config/gcloud/**)`, `Read(~/.config/acli/**)`, `Read(~/.config/containers/auth.json)`, `Read(~/.claude-work/**)`, `Read(~/.claude-personal/**)`, `Read(/run/host/**)` (Distrobox exposes host filesystem at `/run/host`, bypassing `~/` deny patterns)
 - `git config --global core.hooksPath ~/.config/git/hooks` — override per-repo hooks
 - `git config --global core.fsmonitor false` — prevent fsmonitor code execution
-- Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc before running Claude in any new repo
+- Remove `git config --global safe.directory /tmp` (current machine has this — allows malicious repos in world-writable /tmp to execute hooks)
+- Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc **and hooks in settings.json** before running Claude in any new repo. Hooks execute outside sandbox with full user privileges (CVE-2025-59536). Consider `disableAllHooks` or `allowManagedHooksOnly` in managed settings.
 - Consider enabling Claude Code sandbox (`bubblewrap`): `"sandbox": {"enabled": true}` in settings
 
 **Supply chain incidents (2026):**
@@ -337,7 +338,7 @@ Mitigations:
 - Sudo password from vault, not hardcoded.
 - All module names use FQCN (`ansible.builtin.copy`, not `copy`).
 - All `shell:`/`command:` tasks have `changed_when:` and idempotency guards (`creates:`, `when:`).
-- `requirements.yml` pins all external collection versions to prevent supply chain drift. Note: `ansible-galaxy install` has no integrity verification by default — run `ansible-galaxy collection verify` after install.
+- `requirements.yml` pins all external collection versions with explicit `source` URLs (Galaxy has no namespace protection against typosquatting — anyone can register `communitty.general`). Run `ansible-galaxy collection verify` after install. Consider `--keyring` GPG verification.
 - **Ansible repo integrity**: commit signing enforced via branch protection. Consider `ansible-sign` for GPG project-level verification before `make all` runs on a fresh machine.
 - **Audit logging**: Claude Code logs full JSONL transcripts to `~/.claude/projects/`. Enable OpenTelemetry for structured monitoring: `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_LOGS_EXPORTER=console`, `OTEL_LOG_TOOL_DETAILS=1`. Add auditd rules for sensitive file reads (`~/.ssh/`, `~/.aws/`, `~/.kube/`, `~/.vault_pass`).
 
