@@ -156,6 +156,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **Kernel**: blacklist intel_vbtn. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=2` (disable io_uring for unprivileged users — richest kernel exploit surface 2022-2025), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
+- **IPv6**: either disable (`sysctl net.ipv6.conf.all.disable_ipv6=1`) or mirror all IPv4 firewall rules for IPv6. IPv6 traffic can bypass VPN tunnels and firewall rules if only IPv4 is configured.
 - **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
 - **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
 - **Core dumps disabled**: `ulimit -c 0` in shell profile, `kernel.core_pattern=|/bin/false` in sysctl, `ProcessSizeMax=0` in coredump.conf. Prevents secrets from leaking to dump files.
@@ -167,7 +168,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
 - **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
-- **Services**: fail2ban, libvirtd, cups, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand)
+- **Services**: fail2ban, libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). CUPS removed (September 2024 RCE, not needed if not printing; if kept: disable cups-browsed, restrict cupsd to localhost).
 - **Virtualization**: libvirt, qemu-kvm
 
 ### User Environment (become: false)
@@ -226,14 +227,14 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 ### Secrets Management
 
 - **Ansible Vault**: AES-256 encryption. Tiered vault IDs with different trust levels:
-  - **Critical** (SSH keys, production creds): password derived from YubiKey HMAC-SHA1 challenge-response (`ykchalresp -2 "memorized-pin"`). Exists in NO password manager. Both YubiKeys configured with same HMAC secret. Paper backup of hex secret in fireproof safe.
+  - **Critical** (SSH keys, production creds): password derived from YubiKey HMAC-SHA1 challenge-response (`ykchalresp -2 "memorized-pin"`). Exists in NO password manager. Both YubiKeys configured with same HMAC secret — **must program Slot 2 on both keys with identical secret (`ykman otp chalresp 2 <hex-secret>`) before first `ansible-vault encrypt`**. Paper backup of hex secret in fireproof safe.
   - **Infra** (registry tokens, API keys): password in KeePassXC (offline `.kdbx` on USB drive, master password + YubiKey).
   - **Dev** (env vars, non-sensitive config): password in Bitwarden (cloud, acceptable blast radius).
   - Password files at `~/.vault_pass_critical`, `~/.vault_pass_infra`, `~/.vault_pass_dev` (all mode 0600, outside repo).
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets.
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600. Note: Vertex AI vars are NOT in zshrc — they live in `~/.config/claude/work-env` (sourced by the `cw` alias) and direnv `.envrc` per project.
-- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Pre-commit hook greps for `password:`, `token:`, `BEGIN OPENSSH` — deployed by the dotfiles role as a git template hook (`git config --global init.templateDir ~/.config/git/template`, hook in `~/.config/git/template/hooks/pre-commit`).
+- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Deployed as git template hook (`git config --global init.templateDir ~/.config/git/template`).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
 ### Network
@@ -477,6 +478,10 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
     │   #   versions pinned in variables — update by changing variable, re-run
     │   #   ALL binary downloads verified: SHA256 checksums in vars, Ansible get_url checksum= param
     │   #   cosign verify-blob for tools that publish Sigstore signatures (kubectl, grype)
+    │   #   pip: use --require-hashes (pip cache is NOT integrity-verified on reuse, unlike npm/go)
+    │   #   Container images: pin by digest, configure /etc/containers/policy.json for Sigstore verification (default is insecureAcceptAnything)
+    │   #   gitleaks: install for pre-commit hook (replaces grep patterns)
+    │   #   Homebrew PATH: ensure /usr/bin before linuxbrew/bin (linuxbrew is user-writable, can shadow system binaries)
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
     ├── git_repos/                  # clone repos, add fork remotes, profile filters
@@ -900,6 +905,8 @@ See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementatio
 6. **SMS 2FA** — removed from ALL accounts. Zero exceptions.
 
 **Security questions**: random strings stored in Bitwarden notes, never real answers.
+
+**Bitwarden extension**: disable "Auto-fill on page load" (off by default, verify it stays off). Auto-fill on page load is vulnerable to iframe-based credential theft (CVE-2018-25081, exploitable through 2023+). Use manual fill (Ctrl+Shift+L) instead.
 
 **YubiKey dual enrollment**: both keys registered separately with every service. For TOTP, add seed to both keys at the same time before closing the setup page. No way to clone passkeys between keys.
 
