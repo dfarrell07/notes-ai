@@ -274,7 +274,7 @@ All store tokens in plaintext on disk by default:
 - `acli`: `~/.config/` config files
 
 Mitigations:
-- Directory permissions mode 0700, credential files mode 0600.
+- Directory permissions mode 0700, credential files mode 0600. Include `~/.npmrc` (can contain registry tokens, default 0644 — set to 0600, verify `registry=https://registry.npmjs.org/`).
 - Prefer short-lived tokens: `gcloud auth application-default login` (ADC), `aws configure sso`.
 - `gh`: verify keyring is working (`gh auth status`), install `gnome-keyring` as backend.
 - Full-disk encryption (LUKS on Linux, FileVault on Mac) — protects all credential files at rest. RHEL CSB ships with LUKS. For Fedora and macOS, enable during OS install (not automated by this project — must be done at install time).
