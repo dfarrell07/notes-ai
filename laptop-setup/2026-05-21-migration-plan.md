@@ -559,12 +559,50 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 10. Distrobox dev container → if CSB blocks host tools, full dev environment inside Fedora container
 
 **Testing:**
-- **Fedora VM** (libvirt): spin up a fresh Fedora VM, run `make all`, verify idempotency (second run = 0 changed). Fastest feedback loop — test before touching real hardware.
-- **macOS**: run `make all` on the Mac desktop with `profile: personal`. Verify skipped roles, brew installs, dotfiles.
+
+**CI (GitHub Actions) — runs on every push/PR:**
+Following the same pattern as claude-skills repo (shellcheck, yamllint, markdownlint, gitlint, dependabot for GHA + npm, actions pinned to commit SHAs):
+```yaml
+# .github/workflows/linting.yml
+jobs:
+  ansible-lint:     # ansible-lint --profile production
+  yamllint:         # yamllint --strict .
+  shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
+  markdownlint:     # npx markdownlint-cli2 "**/*.md"
+  syntax-check:     # ansible-playbook --syntax-check site.yml
+  gitlint:          # gitlint --commits origin/main..HEAD (PR only)
+```
+
+**Integration tests (manual, against VMs):**
+- **Fedora VM** (libvirt): spin up fresh Fedora VM, run `make all`, verify idempotency (second run = 0 changed). Fastest feedback loop — test before touching real hardware.
+- **macOS**: run `make all` on Mac desktop with `profile: personal`. Verify skipped roles, brew installs, dotfiles.
 - **RHEL CSB**: `make check` (dry run) first, then `make all` with graceful failure handling. Document what breaks.
 - **Idempotency**: every test runs the playbook twice. Second run must report 0 changed.
-- **Linting**: `make lint` passes (ansible-lint + yamllint) before any real machine run.
-- **Smoke tests**: after `make all` — `ssh -T git@github.com`, `claude-work --version`, `claude-personal --version`, `oc version`, `podman info`, `gh auth status`.
+
+**Smoke tests (`make smoke-test` / `scripts/smoke-test.sh`):**
+```bash
+# Post-run verification — run after make all
+ssh -T git@github.com                    # SSH auth works
+oc version --client                       # oc installed
+podman info                               # Podman works
+gh auth status                            # GitHub CLI auth
+ykman info                                # YubiKey detected
+tailscale status                          # Tailscale connected
+claude --version                          # Claude Code installed
+resolvectl status | grep -q DNSOverTLS    # DNS over TLS active
+sysctl kernel.yama.ptrace_scope           # ptrace hardened
+getenforce                                # SELinux enforcing
+ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
+```
+
+**Configs to carry from claude-skills repo:**
+- `.yamllint` (140 char lines, truthy ignore for GHA)
+- `.markdownlint.yml` (140 char lines, no code block limit)
+- `.gitlint` (ignore body-is-missing, ignore dependabot)
+- `.github/dependabot.yml` (monthly GHA, weekly npm)
+- `.github/workflows/stale.yml` (120-day issues, 14-day PRs)
+- `package.json` with markdownlint-cli2 devDep
+- Actions pinned to commit SHAs (not tags)
 
 ## Remote Access
 
