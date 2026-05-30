@@ -12,6 +12,143 @@ Two dimensions control what gets installed:
 - **OS** (`os_family`: fedora/rhel/darwin/debian) — determines *how* (dnf vs brew vs apt, systemd vs launchd, paths)
 - **Profile** (`work` or `personal`) — determines *what* (Red Hat tools, Vertex AI, downstream repos, registry auth)
 
+## Design Decisions
+
+- **Ansible** — one tool for packages, dotfiles, services, secrets
+- **Distrobox** — run Fedora tools on RHEL CSB without root
+- **Alacritty** — replaces urxvt. GPU-accelerated, TOML config, Dracula theme, in Fedora repos
+- **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation.
+- **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
+- **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
+- **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
+- **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (source-available, no public repo — required for GCP)
+- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
+
+## Architecture: Ansible + Claude Code Skill
+
+Ansible handles deterministic provisioning (packages, dotfiles, services, repos). A Claude Code skill wraps it to handle what Ansible can't — interactive auth, diagnostic review, post-run verification, and iterative fixing.
+
+**Skill invocation:** `/laptop-setup` or `make all`
+
+**Skill phases:**
+1. **Pre-flight** — Claude checks: OS detection, YubiKey plugged in, vault passwords accessible, network connectivity, existing state (fresh vs re-run)
+2. **Ansible execution** — runs `ansible-playbook site.yml` with appropriate tags/profile, streams output
+3. **Output review** — Claude reviews Ansible output for failures, diagnoses root causes, suggests or applies fixes
+4. **Interactive auth** — guides user through manual auth steps that Ansible can't automate: `gh auth login`, `oc login --web`, `gcloud auth login`, `acli` login, Bitwarden setup
+5. **Post-run verification** — runs smoke tests (`ssh -T git@github.com`, `claude-work --version`, `podman info`, etc.), reports results
+6. **Summary** — what succeeded, what failed, what needs manual attention, what to run next
+
+**Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
+
+**Implementation details for Ansible:**
+```yaml
+# ansible.cfg
+[defaults]
+become = false
+vault_identity_list = critical@~/.vault_pass_critical, infra@~/.vault_pass_infra, dev@~/.vault_pass_dev
+stdout_callback = yaml
+collections_paths = ./collections
+roles_path = ./roles
+
+# default.config.yml (Geerling pattern — shipped defaults)
+profile: work              # override in config.yml (gitignored)
+install_docker: false       # per-feature booleans
+install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
+
+# Profile gating pattern in roles:
+# roles/redhat/tasks/main.yml
+- name: Deploy CA certs
+  ansible.builtin.copy: ...
+  when: profile == 'work'
+
+# OS gating pattern:
+- name: Install i3
+  ansible.builtin.dnf: ...
+  when: ansible_os_family == 'RedHat' or ansible_os_family == 'Fedora'
+
+# Tags match Makefile targets:
+# site.yml roles use tags: [dotfiles], [packages], [repos], [ssh], [desktop], [system], [redhat], [cloud], [distrobox], [claude]
+```
+
+**File structure:**
+```
+~/laptop-setup/
+├── CLAUDE.md                       # Project-level instructions for Claude Code
+├── skills/
+│   └── setup/SKILL.md              # Main setup skill (pre-flight → ansible → review → auth → verify)
+├── .claude/
+│   ├── SKILLS.md                   # Skill index
+│   └── rules/                      # Path-scoped rules for role-specific guidance
+├── scripts/
+│   ├── preflight.sh                # Pre-flight checks (YubiKey, vault, network)
+│   ├── smoke-test.sh               # Post-run verification
+│   └── auth-guide.sh               # Interactive auth step guidance
+├── ansible.cfg                     # become: false, vault_identity_list, yaml stdout callback
+├── Makefile
+├── site.yml                        # two plays: system (become: true) + user (become: false)
+├── requirements.yml                # pinned collection versions (community.general, containers.podman)
+├── default.config.yml              # profile: work, os-specific defaults
+├── config.yml                      # gitignored overrides (set profile, toggle features)
+├── .ansible-lint                   # profile: production, FQCN required
+├── .yamllint
+├── inventory/localhost.yml
+├── group_vars/all/
+│   ├── repos.yml                   # ~114 git repos
+│   └── vault.yml                   # ansible-vault encrypted: SSH keys, registry auth, env vars
+└── roles/
+    ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
+    ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
+    ├── packages/                   # install methods by source:
+    │   #   dnf: system packages, gh (gh-cli repo), acli (acli repo), gcloud (google repo)
+    │   #   brew: python3, node (+ mac-only: all CLI tools). gemini-cli dropped (Google killing free API June 2026)
+    │   #   binary download (/usr/local/bin): oc, kubectl, kind, kustomize, opm, openshift-install, grype, yq, helm
+    │   #   go install: controller-gen, gofumpt, govulncheck, gci, *-gen, golangci-lint
+    │   #   pip --user: anthropic, pydantic, rpm-lockfile-prototype
+    │   #   npm (via brew node): Claude Code
+    │   #   curl to ~/.local/bin: subctl, distrobox
+    │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xss-lock
+    │   #   versions pinned in variables — update by changing variable, re-run
+    │   #   ALL binary downloads verified: SHA256 checksums in vars, Ansible get_url checksum= param
+    │   #   cosign verify-blob for tools that publish Sigstore signatures (kubectl, grype)
+    │   #   pip: use --require-hashes (pip cache is NOT integrity-verified on reuse, unlike npm/go)
+    │   #   Container images: pin by digest, configure /etc/containers/policy.json for Sigstore verification (default is insecureAcceptAnything)
+    │   #   gitleaks: install for pre-commit hook (replaces grep patterns)
+    │   #   Homebrew PATH: ensure /usr/bin before linuxbrew/bin (linuxbrew is user-writable, can shadow system binaries)
+    ├── dotfiles/                   # config files (copy + template), OS-conditional
+    ├── ssh/                        # SSH keys from vault
+    ├── git_repos/                  # clone repos, add fork remotes, profile filters
+    ├── redhat/                     # CA certs, VPN packages (work profile)
+    ├── containers/                 # podman, docker, registry auth (work profile)
+    ├── virtualization/             # libvirt, qemu-kvm (Linux only)
+    ├── cloud_tools/                # OpenShift/K8s/cloud CLI binaries
+    ├── desktop/                    # i3, Alacritty (Linux desktop), zsh (all)
+    ├── system/                     # firewall, kernel modules, services (Linux only)
+    ├── distrobox/                  # Distrobox + Fedora container (RHEL CSB)
+    └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal), task queue poller (systemd timer + script)
+```
+
+### Makefile Targets
+
+| Target | Sudo? (Linux) | What it does |
+|---|---|---|
+| `make all` | yes | Full setup |
+| `make dotfiles` | no | Deploy config files |
+| `make packages` | yes | Install packages |
+| `make repos` | no | Clone all git repos |
+| `make repos-ovnk` | no | OVN-K repos only |
+| `make repos-konflux` | no | Konflux repos only |
+| `make repos-personal` | no | Personal repos only |
+| `make ssh` | no | Deploy SSH keys |
+| `make desktop` | no | i3 + shell + apps |
+| `make system` | yes | Firewall, kernel, services |
+| `make redhat` | yes | CA certs and VPN |
+| `make cloud` | yes | Cloud CLIs |
+| `make distrobox` | no | Distrobox + Fedora container |
+
+Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification).
+
+Claude Code skill: `/laptop-setup` — runs pre-flight → `make all` → reviews output → guides interactive auth → runs smoke tests → reports summary. Use this instead of bare `make all` for a guided, diagnostic setup experience.
+
 ## What It Sets Up
 
 ### Packages
@@ -177,7 +314,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 ### User Environment (become: false)
 
 - **Shell**: zsh default, oh-my-zsh (git clone to `~/.oh-my-zsh`, not a package — idempotent check for existing dir)
-- **Claude Code**: install on all machines. Two isolated instances on work laptop (see below). Remote Control server (personal profile). Does NOT manage `~/.claude/` configs directly — handled by instance isolation.
+- **Claude Code**: install on all machines. Two isolated instances on work laptop (see Claude Code Configuration). Remote Control server (personal profile). Does NOT manage `~/.claude/` configs directly — handled by instance isolation.
 
 ## Claude Code Configuration
 
@@ -225,7 +362,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - Sandbox: enable with `bubblewrap` (`dnf install bubblewrap socat`). Set `"sandbox": {"enabled": true}` in settings.
 
 - **Container registry auth**: tokens from vault via credential helper (docker-credential-secretservice), deployed to `~/.config/containers/auth.json` with mode 0600 (work profile)
-- **Distrobox**: Fedora dev container — safety valve for RHEL CSB (work profile on RHEL). See Distrobox section below for full spec.
+- **Distrobox**: Fedora dev container — safety valve for RHEL CSB (work profile on RHEL). See RHEL CSB Constraints section for full spec.
 
 ## Security
 
@@ -280,6 +417,49 @@ Mitigations:
 - Prefer short-lived tokens: `gcloud auth application-default login` (ADC), `aws configure sso`.
 - `gh`: verify keyring is working (`gh auth status`), install `gnome-keyring` as backend.
 - Full-disk encryption (LUKS on Linux, FileVault on Mac) — protects all credential files at rest. RHEL CSB ships with LUKS. For Fedora and macOS, enable during OS install (not automated by this project — must be done at install time).
+
+### Authentication
+
+**Full credential refresh during migration** — regenerate ALL passwords (LastPass vault was exfiltrated in 2022).
+
+**Auth stack (strongest to weakest):**
+1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian, Slack. Phishing-resistant, passwordless. ~20 of 100 slots.
+2. **FIDO2 security key** (non-resident, zero slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
+3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 64 OATH slots (32 on firmware pre-5.7, 64 on 5.7+). Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
+4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 25+ chars), KeePassXC vault, device logins, recovery email.
+5. **Recovery codes** — all in KeePassXC on encrypted USB (2 copies, 2 physical locations). Never in Bitwarden (locked out = need these).
+6. **SMS 2FA** — removed from ALL accounts. Zero exceptions.
+
+**Security questions**: random strings stored in Bitwarden notes, never real answers.
+
+**Bitwarden extension**: disable "Auto-fill on page load" (off by default, verify it stays off). Auto-fill on page load is vulnerable to iframe-based credential theft (CVE-2018-25081, exploitable through 2023+). Use manual fill (Ctrl+Shift+L) instead.
+
+**YubiKey dual enrollment**: both keys registered separately with every service. For TOTP, add seed to both keys at the same time before closing the setup page. No way to clone passkeys between keys.
+
+**Google Advanced Protection**: enroll both personal and work accounts. Requires security key for all logins. Strongest Google protection.
+
+**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `shred -u export.csv`.
+
+**Key rotation schedule:**
+- GitHub PATs: 30-day expiry (enforced at creation), auto-revoke expired
+- Container registry tokens: refresh when they expire (manual, documented in acli/podman login)
+- SSH keys: rotate annually or on suspected compromise. Add new key to authorized_keys before removing old.
+- Ansible vault passwords: rotate on compromise or annually. `ansible-vault rekey` all files.
+- Tailscale node keys: 90-day expiry (set in admin console)
+- YubiKey HMAC secret: rotate only if key is compromised (requires re-encrypting critical vault)
+
+**Incident response:**
+- **Credential leak** (secret pushed to git): revoke immediately from any device, rotate affected credential, audit git log for exposure window, force-push to remove from history, notify if third-party data affected.
+- **Compromised machine**: power off (preserve RAM state if forensics needed), revoke all sessions from a DIFFERENT trusted device (phone → GitHub/Google/Bitwarden session revocation), rotate all credentials that were on that machine, rebuild from Ansible.
+- **Lost YubiKey**: revoke the lost key's passkeys from every service (login with backup YubiKey), re-enroll new replacement key. The backup YubiKey keeps you operational during this process.
+- **Recovery device chain**: phone can revoke GitHub/Google sessions via their mobile apps without needing any other device. This is the "break glass" device.
+
+**Recovery circular dependency prevention:**
+- Bitwarden recovery code → KeePassXC on encrypted USB (memorized password)
+- KeePassXC vault password → memorized (Diceware, one of 4 memorized passwords)
+- If KeePassXC password forgotten → printed recovery codes in fireproof safe (physical)
+- If both YubiKeys lost → printed HMAC hex secret in safe → configure new keys → re-derive vault passwords
+- **Test the rebuild**: periodically attempt full environment reconstruction on a VM using only backup mechanisms.
 
 ### Phone / Mobile Security
 
@@ -347,7 +527,9 @@ Mitigations:
 - **Ansible repo integrity**: commit signing enforced via branch protection. Consider `ansible-sign` for GPG project-level verification before `make all` runs on a fresh machine.
 - **Audit logging**: Claude Code logs full JSONL transcripts to `~/.claude/projects/`. Enable OpenTelemetry for structured monitoring: `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_LOGS_EXPORTER=console`, `OTEL_LOG_TOOL_DETAILS=1`. Add auditd rules for sensitive file reads (`~/.ssh/`, `~/.aws/`, `~/.kube/`, `~/.vault_pass`).
 
-## macOS-Specific
+## Platform-Specific
+
+### macOS
 
 Items that only apply to macOS (personal Mac desktop):
 
@@ -373,7 +555,7 @@ Items that only apply to macOS (personal Mac desktop):
 
 **Manual (cannot automate):** TCC permissions — Accessibility (AeroSpace), Full Disk Access (terminal), App Management (brew autoupdate). Requires GUI interaction.
 
-## Chrome Hardening
+### Chrome Hardening
 
 Deploy via Ansible as policy JSON — works without enterprise enrollment on Linux (`/etc/opt/chrome/policies/managed/`) and macOS (`/Library/Managed Preferences/`).
 
@@ -386,315 +568,55 @@ Deploy via Ansible as policy JSON — works without enterprise enrollment on Lin
 
 A malicious extension with `<all_urls>` + `cookies` permissions can steal session tokens for Jira, GitHub, and GCP Console. The extension allowlist is the primary defense.
 
-## Design Decisions
+### RHEL CSB Constraints
 
-- **Ansible** — one tool for packages, dotfiles, services, secrets
-- **Distrobox** — run Fedora tools on RHEL CSB without root
-- **Alacritty** — replaces urxvt. GPU-accelerated, TOML config, Dracula theme, in Fedora repos
-- **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation.
-- **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
-- **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
-- **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
-- **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (source-available, no public repo — required for GCP)
-- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
+RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation image. Exact hardening profile unknown publicly, but if STIG-based these restrictions apply:
 
-## Architecture: Ansible + Claude Code Skill
+**Likely blocked without IT exception:**
+- **Third-party repos** (Tailscale, Mullvad/ProtonVPN, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
+- **Homebrew/Linuxbrew** — installs outside RPM trust database, blocked by fapolicyd if enforcing
+- **pip --user, go install, npm global** — binaries in ~/  paths blocked by fapolicyd (deny-all, permit-by-exception for RPM-trusted paths)
+- **Custom firewall rules** — STIG requires drop zone, admin-managed
+- **Kernel module changes** — `/etc/modprobe.d/` is root-owned, may require `module.sig_enforce=1`
+- **Docker** — not in RHEL repos since RHEL 8, third-party repo required
+- **systemd service enable/disable** — requires root, STIG mandates specific services
 
-Ansible handles deterministic provisioning (packages, dotfiles, services, repos). A Claude Code skill wraps it to handle what Ansible can't — interactive auth, diagnostic review, post-run verification, and iterative fixing.
+**Likely works:**
+- **Podman rootless** — ships with RHEL, Red Hat supported. Needs one-time admin setup of `/etc/subuid` and `/etc/subgid`
+- **Distrobox** — installs to `~/.local/bin/`, uses rootless Podman. Potential blocker: fapolicyd may block scripts in `~/.local/bin/`. Red Hat's official alternative is Toolbx.
+- **SSH server** — STIG allows but heavily restricts (key-only, restricted ciphers, logging)
+- **SELinux** — enforcing with targeted policy, mandatory. Affects container volume mounts (use `:z` flag)
+- **LUKS encryption** — CSB ships with full-disk encryption
 
-**Skill invocation:** `/laptop-setup` or `make all`
+**Uncertain (needs IT verification):**
+- **Sudo access** — may be scoped to specific commands, not blanket `ALL`
+- **USBGuard** — STIG requires it, blocks unknown USB devices. YubiKeys may or may not be whitelisted by default. Adding devices requires root access to `/etc/usbguard/rules.conf`.
+- **fapolicyd** — if enforcing, breaks most developer toolchains (even Red Hat's own Ansible Automation Platform is "not supported when fapolicyd is enforcing"). This is the single biggest risk to the plan.
+- **Tailscale** — requires third-party repo + systemd service. Fallback: SSH over Red Hat VPN (OpenConnect).
 
-**Skill phases:**
-1. **Pre-flight** — Claude checks: OS detection, YubiKey plugged in, vault passwords accessible, network connectivity, existing state (fresh vs re-run)
-2. **Ansible execution** — runs `ansible-playbook site.yml` with appropriate tags/profile, streams output
-3. **Output review** — Claude reviews Ansible output for failures, diagnoses root causes, suggests or applies fixes
-4. **Interactive auth** — guides user through manual auth steps that Ansible can't automate: `gh auth login`, `oc login --web`, `gcloud auth login`, `acli` login, Bitwarden setup
-5. **Post-run verification** — runs smoke tests (`ssh -T git@github.com`, `claude-work --version`, `podman info`, etc.), reports results
-6. **Summary** — what succeeded, what failed, what needs manual attention, what to run next
+**Impact on the plan:**
+- Distrobox becomes critical, not optional — most dev tools may need to run inside a Fedora container
+- The `make system` and `make packages` targets may partially fail on CSB — need graceful handling
+- Two-tier approach: minimal host (Podman, Distrobox/Toolbx, SSH, tmux) + full dev env inside container
 
-**Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
+**Distrobox dev container spec:**
 
-**Implementation details for Ansible:**
-```yaml
-# ansible.cfg
-[defaults]
-become = false
-vault_identity_list = critical@~/.vault_pass_critical, infra@~/.vault_pass_infra, dev@~/.vault_pass_dev
-stdout_callback = yaml
-collections_paths = ./collections
-roles_path = ./roles
+Host provides only: Podman rootless, Distrobox (or Toolbx fallback), SSH, tmux. All dev tools live in a Fedora container.
 
-# default.config.yml (Geerling pattern — shipped defaults)
-profile: work              # override in config.yml (gitignored)
-install_docker: false       # per-feature booleans
-install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
+Container setup via `distrobox.ini` (Ansible generates from Jinja2 template, runs `distrobox assemble create`):
+- Base: Fedora latest
+- Packages via `additional_packages`: Go, Python 3, gcc, clang, vim, zsh, jq, tmux, direnv, fzf, zoxide, shellcheck, shfmt, yamllint, Node.js
+- Binary downloads via `init_hooks`: oc, kubectl, kind, kustomize, helm, opm, subctl, gh, golangci-lint, grype, yq, Claude Code
+- Container commands (podman, buildah, skopeo) delegate to host via `distrobox-host-exec` symlinks — no nested containers
+- kind works: binary in container calls host's Podman to create cluster nodes
 
-# Profile gating pattern in roles:
-# roles/redhat/tasks/main.yml
-- name: Deploy CA certs
-  ansible.builtin.copy: ...
-  when: profile == 'work'
+Shared with host (Distrobox default): home directory, display, network. All dotfiles, SSH keys, Claude Code config, oh-my-zsh work automatically.
 
-# OS gating pattern:
-- name: Install i3
-  ansible.builtin.dnf: ...
-  when: ansible_os_family == 'RedHat' or ansible_os_family == 'Fedora'
+Primary workflow: `distrobox enter dev` → work inside the container. Export sparingly to host (`distrobox-export --bin` for jq, gh, oc) — fapolicyd may block exports anyway.
 
-# Tags match Makefile targets:
-# site.yml roles use tags: [dotfiles], [packages], [repos], [ssh], [desktop], [system], [redhat], [cloud], [distrobox], [claude]
-```
+Upgrade: edit `distrobox.ini`, run `distrobox assemble create --replace`. Home-dir state survives.
 
-**File structure:**
-```
-~/laptop-setup/
-├── CLAUDE.md                       # Project-level instructions for Claude Code
-├── skills/
-│   └── setup/SKILL.md              # Main setup skill (pre-flight → ansible → review → auth → verify)
-├── .claude/
-│   ├── SKILLS.md                   # Skill index
-│   └── rules/                      # Path-scoped rules for role-specific guidance
-├── scripts/
-│   ├── preflight.sh                # Pre-flight checks (YubiKey, vault, network)
-│   ├── smoke-test.sh               # Post-run verification
-│   └── auth-guide.sh               # Interactive auth step guidance
-├── ansible.cfg                     # become: false, vault_identity_list, yaml stdout callback
-├── Makefile
-├── site.yml                        # two plays: system (become: true) + user (become: false)
-├── requirements.yml                # pinned collection versions (community.general, containers.podman)
-├── default.config.yml              # profile: work, os-specific defaults
-├── config.yml                      # gitignored overrides (set profile, toggle features)
-├── .ansible-lint                   # profile: production, FQCN required
-├── .yamllint
-├── inventory/localhost.yml
-├── group_vars/all/
-│   ├── repos.yml                   # ~114 git repos
-│   └── vault.yml                   # ansible-vault encrypted: SSH keys, registry auth, env vars
-└── roles/
-    ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
-    ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
-    ├── packages/                   # install methods by source:
-    │   #   dnf: system packages, gh (gh-cli repo), acli (acli repo), gcloud (google repo)
-    │   #   brew: python3, node (+ mac-only: all CLI tools). gemini-cli dropped (Google killing free API June 2026)
-    │   #   binary download (/usr/local/bin): oc, kubectl, kind, kustomize, opm, openshift-install, grype, yq, helm
-    │   #   go install: controller-gen, gofumpt, govulncheck, gci, *-gen, golangci-lint
-    │   #   pip --user: anthropic, pydantic, rpm-lockfile-prototype
-    │   #   npm (via brew node): Claude Code
-    │   #   curl to ~/.local/bin: subctl, distrobox
-    │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xss-lock
-    │   #   versions pinned in variables — update by changing variable, re-run
-    │   #   ALL binary downloads verified: SHA256 checksums in vars, Ansible get_url checksum= param
-    │   #   cosign verify-blob for tools that publish Sigstore signatures (kubectl, grype)
-    │   #   pip: use --require-hashes (pip cache is NOT integrity-verified on reuse, unlike npm/go)
-    │   #   Container images: pin by digest, configure /etc/containers/policy.json for Sigstore verification (default is insecureAcceptAnything)
-    │   #   gitleaks: install for pre-commit hook (replaces grep patterns)
-    │   #   Homebrew PATH: ensure /usr/bin before linuxbrew/bin (linuxbrew is user-writable, can shadow system binaries)
-    ├── dotfiles/                   # config files (copy + template), OS-conditional
-    ├── ssh/                        # SSH keys from vault
-    ├── git_repos/                  # clone repos, add fork remotes, profile filters
-    ├── redhat/                     # CA certs, VPN packages (work profile)
-    ├── containers/                 # podman, docker, registry auth (work profile)
-    ├── virtualization/             # libvirt, qemu-kvm (Linux only)
-    ├── cloud_tools/                # OpenShift/K8s/cloud CLI binaries
-    ├── desktop/                    # i3, Alacritty (Linux desktop), zsh (all)
-    ├── system/                     # firewall, kernel modules, services (Linux only)
-    ├── distrobox/                  # Distrobox + Fedora container (RHEL CSB)
-    └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal), task queue poller (systemd timer + script)
-```
-
-## Makefile Targets
-
-| Target | Sudo? (Linux) | What it does |
-|---|---|---|
-| `make all` | yes | Full setup |
-| `make dotfiles` | no | Deploy config files |
-| `make packages` | yes | Install packages |
-| `make repos` | no | Clone all git repos |
-| `make repos-ovnk` | no | OVN-K repos only |
-| `make repos-konflux` | no | Konflux repos only |
-| `make repos-personal` | no | Personal repos only |
-| `make ssh` | no | Deploy SSH keys |
-| `make desktop` | no | i3 + shell + apps |
-| `make system` | yes | Firewall, kernel, services |
-| `make redhat` | yes | CA certs and VPN |
-| `make cloud` | yes | Cloud CLIs |
-| `make distrobox` | no | Distrobox + Fedora container |
-
-Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification).
-
-Claude Code skill: `/laptop-setup` — runs pre-flight → `make all` → reviews output → guides interactive auth → runs smoke tests → reports summary. Use this instead of bare `make all` for a guided, diagnostic setup experience.
-
-## Bootstrap (fresh machine)
-
-**Fedora/RHEL:**
-```bash
-sudo dnf install ansible-core git ykpers  # ykpers provides ykchalresp
-git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
-cd ~/laptop-setup
-ansible-galaxy collection install -r requirements.yml
-# Get vault passwords (see below)
-make all
-```
-
-**macOS:**
-```bash
-xcode-select --install
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install ansible git openssh libfido2 ykman
-git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
-cd ~/laptop-setup
-ansible-galaxy collection install -r requirements.yml
-# Get vault passwords (see below)
-make all
-```
-Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
-
-**Vault password retrieval** (before `make all`):
-1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
-2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
-3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev` → `bw lock && unset BW_SESSION` after retrieval
-4. `make all` decrypts each vault tier. The skill's post-run phase auto-shreds vault password files (`shred -u ~/.vault_pass_*`). Alternative: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
-
-**Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
-
-## Implementation Phases
-
-1. Skeleton + dotfiles → `make dotfiles` works
-2. **RHEL CSB recon** → `make check` on CSB, identify fapolicyd/sudo/USBGuard constraints early. Determines whether Distrobox is optional or required.
-3. Packages + third-party repos → `make packages` idempotent
-4. Git repos with category filtering → `make repos-ovnk` works
-5. Vault + SSH + Red Hat + containers → `ssh -T git@github.com` works
-6. System + remaining roles → `make all` idempotent
-7. Profile support → `make all` with `profile: personal` skips work-only roles
-8. Task queue repo → create private repo, laptop-side issue poller + `claude -p` runner
-9. Multi-OS → test on macOS, adjust conditionals
-10. Distrobox dev container → if CSB blocks host tools, full dev environment inside Fedora container
-
-**Testing:**
-
-**CI (GitHub Actions) — runs on every push/PR:**
-Following the same pattern as claude-skills repo (shellcheck, yamllint, markdownlint, gitlint, dependabot for GHA + npm, actions pinned to commit SHAs):
-```yaml
-# .github/workflows/linting.yml
-jobs:
-  ansible-lint:     # ansible-lint --profile production
-  yamllint:         # yamllint --strict .
-  shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
-  markdownlint:     # npx markdownlint-cli2 "**/*.md"
-  syntax-check:     # ansible-playbook --syntax-check site.yml
-  gitlint:          # gitlint --commits origin/main..HEAD (PR only)
-```
-
-**Molecule test infrastructure** (two scenarios):
-
-`molecule/container/` — fast feedback (seconds, runs in CI):
-- Podman container (Fedora latest), tests dotfiles, packages, config roles
-- Cannot test: systemd services, firewall, kernel modules, desktop
-- Runs on every PR via GitHub Actions
-
-`molecule/vm/` — full integration (minutes, local or self-hosted runner):
-- Vagrant + libvirt VM (Fedora latest box), tests everything including services
-- `dnf install libvirt vagrant vagrant-libvirt` (use Fedora-packaged Vagrant)
-- Idempotency: Molecule runs the playbook twice, asserts 0 changed on second run
-- Verification: `verify.yml` with Ansible assert tasks (packages present, configs correct, services running)
-- Snapshot/rollback for iterative dev: `virsh snapshot-create-as` before test, `virsh snapshot-revert` to retry
-
-`make test` runs both: `molecule test -s container && molecule test -s vm`
-
-**Platform-specific testing:**
-- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux.
-- **RHEL/CSB**: CentOS Stream 10 as proxy (what RHEL 10 is built from). Free Red Hat Developer Subscription for actual RHEL testing (16 systems).
-- **Full CI strategy**: containers on every PR (fast gate), VM on merge to main (thorough), macOS runner for macOS roles.
-
-**Smoke tests (`make smoke-test` / `scripts/smoke-test.sh`):**
-```bash
-# Post-run verification — run after make all
-ssh -T git@github.com                    # SSH auth works
-oc version --client                       # oc installed
-podman info                               # Podman works
-gh auth status                            # GitHub CLI auth
-ykman info                                # YubiKey detected
-tailscale status                          # Tailscale connected
-claude --version                          # Claude Code installed
-resolvectl status | grep -q DNSOverTLS    # DNS over TLS active
-sysctl kernel.yama.ptrace_scope           # ptrace hardened
-getenforce                                # SELinux enforcing
-ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
-```
-
-**Configs to carry from claude-skills repo:**
-- `.yamllint` (140 char lines, truthy ignore for GHA)
-- `.markdownlint.yml` (140 char lines, no code block limit)
-- `.gitlint` (ignore body-is-missing, ignore dependabot)
-- `.github/dependabot.yml` (monthly GHA, weekly npm)
-- `.github/workflows/stale.yml` (120-day issues, 14-day PRs)
-- `package.json` with markdownlint-cli2 devDep
-- Actions pinned to commit SHAs (not tags)
-
-## Remote Access
-
-### Work Machines (Vertex AI)
-
-Remote Control, Dispatch, cloud sessions, and Routines all require claude.ai OAuth — they do not work with Vertex AI auth. The only remote access to Claude Code on work machines is SSH.
-
-**From another computer (Tailscale + SSH + tmux):**
-- Tailscale mesh VPN connects machines — no open ports, NAT traversal automatic
-- `ssh work-machine` → `tmux attach -t claude`
-- Claude Code runs in a tmux session with full local access (repos, MCP servers, skills, plugins)
-- Vertex AI billing and auth preserved
-- Requires: machine on + Tailscale connected + YubiKey physically present on the connecting machine
-- Open question: does Red Hat IT allow Tailscale on RHEL CSB? If not, fallback is SSH over Red Hat VPN (OpenConnect)
-
-**From phone (GitHub Issues → PR workflow — no SSH to laptop):**
-
-Phone never has direct access to the laptop. GitHub is the only communication channel.
-
-Flow:
-1. Phone: create GitHub Issue with spec/plan in a private repo (GitHub app, voice dictation)
-2. Laptop: polls for open issues (`gh issue list`), Claude Code picks one up, creates branch, does the work, opens PR linking the issue
-3. Phone: review PR in GitHub app (diffs, inline comments, approve, merge)
-4. Claude Code comments on the issue with progress/questions, closes issue when PR merged
-
-Phone side:
-- GitHub mobile app — native issue creation, PR review, voice dictation via keyboard
-- No Termux/Tasker needed for basic workflow
-- Optional: work or personal Claude app to help compose issue specs (GitHub connector read-only)
-
-Laptop side:
-- Systemd timer (every 2 min, oneshot prevents overlap) — see Task Queue Repo section for full design
-- Safety: `--allowedTools` whitelist per repo, `--max-turns 50`, `--max-budget-usd 5.00`, 30 min timeout
-
-Security:
-- No SSH key on phone, no Tailscale needed
-- Phone only needs GitHub auth — device extraction gets GitHub token but no laptop shell access
-- Attacker can create issues but `--allowedTools` limits what Claude can do
-- PRs require human review before merge — no direct commits to main
-- Full audit trail via issues, PRs, and comments
-
-### Personal Machines (Anthropic account)
-
-Personal Anthropic Pro account. All remote features available.
-
-- **Remote Control**: `claude remote-control` as persistent server. Steer from claude.ai/code or Claude mobile app. No inbound ports, survives network drops.
-- **Dispatch**: pair Claude mobile app with Claude Desktop. Send tasks from phone, machine runs them.
-- **Cloud sessions**: claude.ai/code → remote session against GitHub repos, no local machine needed. Teleport to local later.
-- **Routines**: scheduled or API-triggered cloud runs.
-- **Claude Desktop MCP (Mac)**: full local MCP server support + 50+ built-in connectors (GitHub, Slack, Jira, Google Drive, etc.)
-
-### Claude Chat Apps (separate from Claude Code)
-
-Two apps, different accounts, different capabilities:
-
-**Work app** (managed, Red Hat email):
-- Claude chat under Team/Enterprise plan, admin-enforced restrictions (e.g. Gmail/GCal blocked)
-- Check which connectors IT has enabled — Jira and GitHub useful for reading issues/repos from phone
-- Cannot push commits or connect to Claude Code on laptop — separate product, separate auth
-
-**Personal app** (Pro/Max account):
-- Full 50+ connectors, voice mode, no restrictions
-- Mobile: remote MCP only (publicly reachable servers), GitHub read-only (can't push)
-- Desktop: full local MCP + remote MCP
-
-Neither app replaces the git task queue for sending work to Claude Code.
+See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 
 ## Device Ecosystem
 
@@ -708,7 +630,7 @@ Neither app replaces the git task queue for sending work to Claude Code.
 - **Dispatch**: send tasks from Claude iOS app to Mac Desktop app
 - **No local Claude Code** — iPad runs iPadOS, not practical for Node.js
 
-### Pixelbook (lightweight dev + thin client)
+### Pixelbook Go (lightweight dev + thin client)
 
 - **Primary role**: thin client via browser + light local dev in Crostini
 - **Remote Control**: `claude.ai/code` in Chrome → steer Mac desktop sessions. Best thin-client experience.
@@ -800,64 +722,73 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 - Google Docs/Sheets for one-off sharing (itineraries, budgets)
 - Pattern: git is source of truth, published view is the bridge
 
-### Known Limitations
+## Remote Access
 
-- **Work phone → Claude Code is async only** — git task queue, 2-3 min delay. Hard constraint of Vertex AI auth.
-- **YubiKey required physically** for SSH — no key = no access. Keep backup YubiKey accessible.
-- **Personal features need Pro/Max account** — have Pro, all features available.
-- **Work Claude app connectors** are admin-managed — availability depends on Red Hat IT policy.
+### Work Machines (Vertex AI)
 
-## RHEL CSB Constraints
+Remote Control, Dispatch, cloud sessions, and Routines all require claude.ai OAuth — they do not work with Vertex AI auth. The only remote access to Claude Code on work machines is SSH.
 
-RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation image. Exact hardening profile unknown publicly, but if STIG-based these restrictions apply:
+**From another computer (Tailscale + SSH + tmux):**
+- Tailscale mesh VPN connects machines — no open ports, NAT traversal automatic
+- `ssh work-machine` → `tmux attach -t claude`
+- Claude Code runs in a tmux session with full local access (repos, MCP servers, skills, plugins)
+- Vertex AI billing and auth preserved
+- Requires: machine on + Tailscale connected + YubiKey physically present on the connecting machine
+- Open question: does Red Hat IT allow Tailscale on RHEL CSB? If not, fallback is SSH over Red Hat VPN (OpenConnect)
 
-**Likely blocked without IT exception:**
-- **Third-party repos** (Tailscale, Mullvad/ProtonVPN, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
-- **Homebrew/Linuxbrew** — installs outside RPM trust database, blocked by fapolicyd if enforcing
-- **pip --user, go install, npm global** — binaries in ~/  paths blocked by fapolicyd (deny-all, permit-by-exception for RPM-trusted paths)
-- **Custom firewall rules** — STIG requires drop zone, admin-managed
-- **Kernel module changes** — `/etc/modprobe.d/` is root-owned, may require `module.sig_enforce=1`
-- **Docker** — not in RHEL repos since RHEL 8, third-party repo required
-- **systemd service enable/disable** — requires root, STIG mandates specific services
+**From phone (GitHub Issues → PR workflow — no SSH to laptop):**
 
-**Likely works:**
-- **Podman rootless** — ships with RHEL, Red Hat supported. Needs one-time admin setup of `/etc/subuid` and `/etc/subgid`
-- **Distrobox** — installs to `~/.local/bin/`, uses rootless Podman. Potential blocker: fapolicyd may block scripts in `~/.local/bin/`. Red Hat's official alternative is Toolbx.
-- **SSH server** — STIG allows but heavily restricts (key-only, restricted ciphers, logging)
-- **SELinux** — enforcing with targeted policy, mandatory. Affects container volume mounts (use `:z` flag)
-- **LUKS encryption** — CSB ships with full-disk encryption
+Phone never has direct access to the laptop. GitHub is the only communication channel.
 
-**Uncertain (needs IT verification):**
-- **Sudo access** — may be scoped to specific commands, not blanket `ALL`
-- **USBGuard** — STIG requires it, blocks unknown USB devices. YubiKeys may or may not be whitelisted by default. Adding devices requires root access to `/etc/usbguard/rules.conf`.
-- **fapolicyd** — if enforcing, breaks most developer toolchains (even Red Hat's own Ansible Automation Platform is "not supported when fapolicyd is enforcing"). This is the single biggest risk to the plan.
-- **Tailscale** — requires third-party repo + systemd service. Fallback: SSH over Red Hat VPN (OpenConnect).
+Flow:
+1. Phone: create GitHub Issue with spec/plan in a private repo (GitHub app, voice dictation)
+2. Laptop: polls for open issues (`gh issue list`), Claude Code picks one up, creates branch, does the work, opens PR linking the issue
+3. Phone: review PR in GitHub app (diffs, inline comments, approve, merge)
+4. Claude Code comments on the issue with progress/questions, closes issue when PR merged
 
-**Impact on the plan:**
-- Distrobox becomes critical, not optional — most dev tools may need to run inside a Fedora container
-- The `make system` and `make packages` targets may partially fail on CSB — need graceful handling
-- Two-tier approach: minimal host (Podman, Distrobox/Toolbx, SSH, tmux) + full dev env inside container
+Phone side:
+- GitHub mobile app — native issue creation, PR review, voice dictation via keyboard
+- No Termux/Tasker needed for basic workflow
+- Optional: work or personal Claude app to help compose issue specs (GitHub connector read-only)
 
-**Distrobox dev container spec:**
+Laptop side:
+- Systemd timer (every 2 min, oneshot prevents overlap) — see Task Queue Repo section for full design
+- Safety: `--allowedTools` whitelist per repo, `--max-turns 50`, `--max-budget-usd 5.00`, 30 min timeout
 
-Host provides only: Podman rootless, Distrobox (or Toolbx fallback), SSH, tmux. All dev tools live in a Fedora container.
+Security:
+- No SSH key on phone, no Tailscale needed
+- Phone only needs GitHub auth — device extraction gets GitHub token but no laptop shell access
+- Attacker can create issues but `--allowedTools` limits what Claude can do
+- PRs require human review before merge — no direct commits to main
+- Full audit trail via issues, PRs, and comments
 
-Container setup via `distrobox.ini` (Ansible generates from Jinja2 template, runs `distrobox assemble create`):
-- Base: Fedora latest
-- Packages via `additional_packages`: Go, Python 3, gcc, clang, vim, zsh, jq, tmux, direnv, fzf, zoxide, shellcheck, shfmt, yamllint, Node.js
-- Binary downloads via `init_hooks`: oc, kubectl, kind, kustomize, helm, opm, subctl, gh, golangci-lint, grype, yq, Claude Code
-- Container commands (podman, buildah, skopeo) delegate to host via `distrobox-host-exec` symlinks — no nested containers
-- kind works: binary in container calls host's Podman to create cluster nodes
+### Personal Machines (Anthropic account)
 
-Shared with host (Distrobox default): home directory, display, network. All dotfiles, SSH keys, Claude Code config, oh-my-zsh work automatically.
+Personal Anthropic Pro account. All remote features available.
 
-Primary workflow: `distrobox enter dev` → work inside the container. Export sparingly to host (`distrobox-export --bin` for jq, gh, oc) — fapolicyd may block exports anyway.
+- **Remote Control**: `claude remote-control` as persistent server. Steer from claude.ai/code or Claude mobile app. No inbound ports, survives network drops.
+- **Dispatch**: pair Claude mobile app with Claude Desktop. Send tasks from phone, machine runs them.
+- **Cloud sessions**: claude.ai/code → remote session against GitHub repos, no local machine needed. Teleport to local later.
+- **Routines**: scheduled or API-triggered cloud runs.
+- **Claude Desktop MCP (Mac)**: full local MCP server support + 50+ built-in connectors (GitHub, Slack, Jira, Google Drive, etc.)
 
-Upgrade: edit `distrobox.ini`, run `distrobox assemble create --replace`. Home-dir state survives.
+### Claude Chat Apps (separate from Claude Code)
 
-See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
+Two apps, different accounts, different capabilities:
 
-## Task Queue Repo
+**Work app** (managed, Red Hat email):
+- Claude chat under Team/Enterprise plan, admin-enforced restrictions (e.g. Gmail/GCal blocked)
+- Check which connectors IT has enabled — Jira and GitHub useful for reading issues/repos from phone
+- Cannot push commits or connect to Claude Code on laptop — separate product, separate auth
+
+**Personal app** (Pro/Max account):
+- Full 50+ connectors, voice mode, no restrictions
+- Mobile: remote MCP only (publicly reachable servers), GitHub read-only (can't push)
+- Desktop: full local MCP + remote MCP
+
+Neither app replaces the git task queue for sending work to Claude Code.
+
+### Task Queue Repo
 
 Private GitHub repo for phone-to-laptop async task communication via Issues and PRs.
 
@@ -900,50 +831,123 @@ podman run --rm --network=slirp4netns --read-only \
 
 See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementation design.
 
-## Authentication Architecture
+### Known Limitations
 
-**Full credential refresh during migration** — regenerate ALL passwords (LastPass vault was exfiltrated in 2022).
+- **Work phone → Claude Code is async only** — git task queue, 2-3 min delay. Hard constraint of Vertex AI auth.
+- **YubiKey required physically** for SSH — no key = no access. Keep backup YubiKey accessible.
+- **Personal features need Pro/Max account** — have Pro, all features available.
+- **Work Claude app connectors** are admin-managed — availability depends on Red Hat IT policy.
 
-**Auth stack (strongest to weakest):**
-1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian, Slack. Phishing-resistant, passwordless. ~20 of 100 slots.
-2. **FIDO2 security key** (non-resident, zero slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
-3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 64 OATH slots (32 on firmware pre-5.7, 64 on 5.7+). Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
-4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 25+ chars), KeePassXC vault, device logins, recovery email.
-5. **Recovery codes** — all in KeePassXC on encrypted USB (2 copies, 2 physical locations). Never in Bitwarden (locked out = need these).
-6. **SMS 2FA** — removed from ALL accounts. Zero exceptions.
+## Implementation
 
-**Security questions**: random strings stored in Bitwarden notes, never real answers.
+### Bootstrap (fresh machine)
 
-**Bitwarden extension**: disable "Auto-fill on page load" (off by default, verify it stays off). Auto-fill on page load is vulnerable to iframe-based credential theft (CVE-2018-25081, exploitable through 2023+). Use manual fill (Ctrl+Shift+L) instead.
+**Fedora/RHEL:**
+```bash
+sudo dnf install ansible-core git ykpers  # ykpers provides ykchalresp
+git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
+cd ~/laptop-setup
+ansible-galaxy collection install -r requirements.yml
+# Get vault passwords (see below)
+make all
+```
 
-**YubiKey dual enrollment**: both keys registered separately with every service. For TOTP, add seed to both keys at the same time before closing the setup page. No way to clone passkeys between keys.
+**macOS:**
+```bash
+xcode-select --install
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install ansible git openssh libfido2 ykman
+git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
+cd ~/laptop-setup
+ansible-galaxy collection install -r requirements.yml
+# Get vault passwords (see below)
+make all
+```
+Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
 
-**Google Advanced Protection**: enroll both personal and work accounts. Requires security key for all logins. Strongest Google protection.
+**Vault password retrieval** (before `make all`):
+1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
+2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
+3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev` → `bw lock && unset BW_SESSION` after retrieval
+4. `make all` decrypts each vault tier. The skill's post-run phase auto-shreds vault password files (`shred -u ~/.vault_pass_*`). Alternative: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
 
-**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `shred -u export.csv`.
+**Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
 
-**Key rotation schedule:**
-- GitHub PATs: 30-day expiry (enforced at creation), auto-revoke expired
-- Container registry tokens: refresh when they expire (manual, documented in acli/podman login)
-- SSH keys: rotate annually or on suspected compromise. Add new key to authorized_keys before removing old.
-- Ansible vault passwords: rotate on compromise or annually. `ansible-vault rekey` all files.
-- Tailscale node keys: 90-day expiry (set in admin console)
-- YubiKey HMAC secret: rotate only if key is compromised (requires re-encrypting critical vault)
+### Phases
 
-**Incident response:**
-- **Credential leak** (secret pushed to git): revoke immediately from any device, rotate affected credential, audit git log for exposure window, force-push to remove from history, notify if third-party data affected.
-- **Compromised machine**: power off (preserve RAM state if forensics needed), revoke all sessions from a DIFFERENT trusted device (phone → GitHub/Google/Bitwarden session revocation), rotate all credentials that were on that machine, rebuild from Ansible.
-- **Lost YubiKey**: revoke the lost key's passkeys from every service (login with backup YubiKey), re-enroll new replacement key. The backup YubiKey keeps you operational during this process.
-- **Recovery device chain**: phone can revoke GitHub/Google sessions via their mobile apps without needing any other device. This is the "break glass" device.
+1. Skeleton + dotfiles → `make dotfiles` works
+2. **RHEL CSB recon** → `make check` on CSB, identify fapolicyd/sudo/USBGuard constraints early. Determines whether Distrobox is optional or required.
+3. Packages + third-party repos → `make packages` idempotent
+4. Git repos with category filtering → `make repos-ovnk` works
+5. Vault + SSH + Red Hat + containers → `ssh -T git@github.com` works
+6. System + remaining roles → `make all` idempotent
+7. Profile support → `make all` with `profile: personal` skips work-only roles
+8. Task queue repo → create private repo, laptop-side issue poller + `claude -p` runner
+9. Multi-OS → test on macOS, adjust conditionals
+10. Distrobox dev container → if CSB blocks host tools, full dev environment inside Fedora container
 
-**Recovery circular dependency prevention:**
-- Bitwarden recovery code → KeePassXC on encrypted USB (memorized password)
-- KeePassXC vault password → memorized (Diceware, one of 4 memorized passwords)
-- If KeePassXC password forgotten → printed recovery codes in fireproof safe (physical)
-- If both YubiKeys lost → printed HMAC hex secret in safe → configure new keys → re-derive vault passwords
-- **Test the rebuild**: periodically attempt full environment reconstruction on a VM using only backup mechanisms.
+### Testing
 
-## Manual Setup
+**CI (GitHub Actions) — runs on every push/PR:**
+Following the same pattern as claude-skills repo (shellcheck, yamllint, markdownlint, gitlint, dependabot for GHA + npm, actions pinned to commit SHAs):
+```yaml
+# .github/workflows/linting.yml
+jobs:
+  ansible-lint:     # ansible-lint --profile production
+  yamllint:         # yamllint --strict .
+  shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
+  markdownlint:     # npx markdownlint-cli2 "**/*.md"
+  syntax-check:     # ansible-playbook --syntax-check site.yml
+  gitlint:          # gitlint --commits origin/main..HEAD (PR only)
+```
+
+**Molecule test infrastructure** (two scenarios):
+
+`molecule/container/` — fast feedback (seconds, runs in CI):
+- Podman container (Fedora latest), tests dotfiles, packages, config roles
+- Cannot test: systemd services, firewall, kernel modules, desktop
+- Runs on every PR via GitHub Actions
+
+`molecule/vm/` — full integration (minutes, local or self-hosted runner):
+- Vagrant + libvirt VM (Fedora latest box), tests everything including services
+- `dnf install libvirt vagrant vagrant-libvirt` (use Fedora-packaged Vagrant)
+- Idempotency: Molecule runs the playbook twice, asserts 0 changed on second run
+- Verification: `verify.yml` with Ansible assert tasks (packages present, configs correct, services running)
+- Snapshot/rollback for iterative dev: `virsh snapshot-create-as` before test, `virsh snapshot-revert` to retry
+
+`make test` runs both: `molecule test -s container && molecule test -s vm`
+
+**Platform-specific testing:**
+- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux.
+- **RHEL/CSB**: CentOS Stream 10 as proxy (what RHEL 10 is built from). Free Red Hat Developer Subscription for actual RHEL testing (16 systems).
+- **Full CI strategy**: containers on every PR (fast gate), VM on merge to main (thorough), macOS runner for macOS roles.
+
+**Smoke tests (`make smoke-test` / `scripts/smoke-test.sh`):**
+```bash
+# Post-run verification — run after make all
+ssh -T git@github.com                    # SSH auth works
+oc version --client                       # oc installed
+podman info                               # Podman works
+gh auth status                            # GitHub CLI auth
+ykman info                                # YubiKey detected
+tailscale status                          # Tailscale connected
+claude --version                          # Claude Code installed
+resolvectl status | grep -q DNSOverTLS    # DNS over TLS active
+sysctl kernel.yama.ptrace_scope           # ptrace hardened
+getenforce                                # SELinux enforcing
+ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
+```
+
+**Configs to carry from claude-skills repo:**
+- `.yamllint` (140 char lines, truthy ignore for GHA)
+- `.markdownlint.yml` (140 char lines, no code block limit)
+- `.gitlint` (ignore body-is-missing, ignore dependabot)
+- `.github/dependabot.yml` (monthly GHA, weekly npm)
+- `.github/workflows/stale.yml` (120-day issues, 14-day PRs)
+- `package.json` with markdownlint-cli2 devDep
+- Actions pinned to commit SHAs (not tags)
+
+### Manual Setup
 
 **All machines:**
 - YubiKey SSH key enrollment (verify firmware 5.7+ with `ykman info`)
