@@ -232,7 +232,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
   - Password files at `~/.vault_pass_critical`, `~/.vault_pass_infra`, `~/.vault_pass_dev` (all mode 0600, outside repo).
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets.
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
-- **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600. Note: Vertex AI vars are NOT in zshrc — they live in direnv `.envrc` and claude-work alias only.
+- **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600. Note: Vertex AI vars are NOT in zshrc — they live in `~/.config/claude/work-env` (sourced by the `cw` alias) and direnv `.envrc` per project.
 - **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Pre-commit hook greps for `password:`, `token:`, `BEGIN OPENSSH` — deployed by the dotfiles role as a git template hook (`git config --global init.templateDir ~/.config/git/template`, hook in `~/.config/git/template/hooks/pre-commit`).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
@@ -420,7 +420,7 @@ roles_path = ./roles
 # default.config.yml (Geerling pattern — shipped defaults)
 profile: work              # override in config.yml (gitignored)
 install_docker: false       # per-feature booleans
-install_expressvpn: false   # renamed mullvad/protonvpn
+install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 
 # Profile gating pattern in roles:
 # roles/redhat/tasks/main.yml
@@ -858,7 +858,7 @@ podman run --rm --network=slirp4netns --read-only \
   --memory=4g --cpus=2 --pids-limit=256 \
   --cap-drop=ALL --security-opt=no-new-privileges \
   --userns=keep-id -v "$REPO:/workspace:Z" \
-  -e ANTHROPIC_API_KEY="$KEY" claude-task-runner \
+  --secret claude-api-key,type=env,target=ANTHROPIC_API_KEY claude-task-runner \
   -p "$PROMPT" --allowedTools "$TOOLS" --max-turns 50
 ```
 - Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds
