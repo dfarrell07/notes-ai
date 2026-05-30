@@ -234,11 +234,11 @@ Key custom settings to preserve:
   # ~/.config/claude/work-env (mode 0600, deployed by Ansible, NOT in zshrc):
   #   export CLAUDE_CONFIG_DIR=~/.claude-work
   #   export CLAUDE_CODE_USE_VERTEX=1
-  #   export ANTHROPIC_VERTEX_PROJECT_ID=itpc-gcp-hcm-pe-eng-claude
+  #   export ANTHROPIC_VERTEX_PROJECT_ID=<vertex-project-id>
   #   export CLOUD_ML_REGION=global
   ccp() {  # Claude Code Personal (not `cp` — shadows copy command)
     # Guard: prevent sending work code through personal Anthropic account
-    if [[ "$PWD" == */src/openshift/* || "$PWD" == */src/submariner-io/* || "$PWD" == */src/stolostron/* || "$PWD" == */src/code.engineering/* || "$PWD" == */src/gitlab.cee/* ]]; then
+    if [[ "$PWD" == */src/openshift/* || "$PWD" == */src/submariner-io/* || "$PWD" == */src/stolostron/* || "$PWD" == */src/INTERNAL_GIT/* || "$PWD" == */src/INTERNAL_GITLAB/* ]]; then
       echo "ERROR: Work directory detected. Use 'cw' for work repos."; return 1
     fi
     local s="personal-${PWD##*/}"
@@ -289,7 +289,7 @@ Key custom settings to preserve:
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
-- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), code.engineering/gitlab.cee (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 60` — one YubiKey tap opens a 60-second multiplexed session (shorter than 600s to limit socket hijack window). `~/.ssh/sockets/` mode 0700.
+- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), internal git servers (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 60` — one YubiKey tap opens a 60-second multiplexed session (shorter than 600s to limit socket hijack window). `~/.ssh/sockets/` mode 0700.
 - **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xss-lock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately). Note: current config says `git_protocol: ssh` — must change to `https` during setup.
 - **gh hosts.yml**: `github.com`, user `dfarrell07`, `git_protocol: https`.
@@ -311,8 +311,8 @@ All repos under `~/src/` with URL-mirroring layout. GitHub repos at `<org>/<repo
 ├── submariner-io/submariner-operator/    # github (default)
 ├── openshift/ovn-kubernetes/
 ├── dfarrell07/notes-ai/
-├── code.engineering/dfarrell/            # code.engineering.redhat.com
-└── gitlab.cee/dfarrell/                  # gitlab.cee.redhat.com
+├── INTERNAL_GIT/dfarrell/                # internal git server (work profile, VPN)
+└── INTERNAL_GITLAB/dfarrell/             # internal GitLab (work profile, VPN)
 ```
 
 Defined in `repos.yml` with url, dest, category, enabled, optional extra_remotes. Cloned with `update: false`. Fork remotes added idempotently. VPN-dependent repos use `failed_when: false`. Filter by category: `-e repo_category=ovnk`.
@@ -370,6 +370,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - Vertex AI (work): prompts go to Google infrastructure, not Anthropic. No training. Customer-controlled retention. Telemetry to Anthropic off by default.
 - Anthropic Pro (personal): turn off "Improve Claude" in privacy settings (5-year retention if on, 30 days if off). No ZDR or DPA on Pro plan. Consumer terms, not commercial.
 - Disable non-essential telemetry: `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in both instances.
+- Transcript hygiene: set `"cleanupPeriodDays": 7` in `settings.json` (default is 30). Use `--no-session-persistence` for sensitive one-off queries. Transcripts are plaintext — full-disk encryption (LUKS/FileVault) is the at-rest protection.
 - Cross-contamination: running personal instance while cd'd into a work repo sends work code through Anthropic. The `ccp()` wrapper verifies the current directory before launching (see shell aliases).
 
 `~/.claude-work/CLAUDE.md` and `~/.claude-personal/CLAUDE.md` (keep under 150 lines each):
@@ -377,6 +378,8 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - You cannot push — pushes route over SSH and require YubiKey touch. Commit to a branch, then ask the user to push. Once pushed, open the PR.
 - Prefer terse responses.
 - After any manual install, config tweak, or system change — update the corresponding Ansible role in `~/laptop-setup` to capture it. The Ansible repo is the source of truth for machine state.
+- Never include conversation context, user names, or personal details in commit messages or PR descriptions. Reference code, not people.
+- Never include internal infrastructure names (hostnames, cluster names, registry URLs) in commits to public repos. Use placeholders — actual names are in CLAUDE.local.md.
 
 **Parallel work (worktrees):**
 - Always use `claude --worktree <name>` or the `cw`/`ccp` aliases (which create tmux sessions) when running multiple Claude sessions on the same repo. Never run two sessions in the same working directory — causes branch swapping (#60295).
@@ -415,7 +418,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets (critical: without this, `--check --diff` leaks decrypted vault content to terminal scrollback, tmux history, and Claude Code transcripts).
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600.
-- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Deployed as git template hook (`git config --global init.templateDir ~/.config/git/template`).
+- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Additional `commit-msg` hook rejects messages containing internal domain patterns (prevents AI-generated commits from leaking infrastructure names). Both deployed as git template hooks (`git config --global init.templateDir ~/.config/git/template`).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
 ### Network
@@ -432,7 +435,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **fail2ban**: installed and enabled. Reduces log noise, catches misconfigured scanners.
 - **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 keys vulnerable to EUCLEAK CVE-2024-45678). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
 - **Backup YubiKey**: separate key enrolled on a second YubiKey, stored securely. Prevents lockout if primary is lost/damaged.
-- **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644. Deploy pre-seeded `known_hosts` with verified fingerprints for github.com, code.engineering, gitlab.cee (avoids TOFU, prevents leaking internal hostnames). Set `HashKnownHosts yes` in ssh config.
+- **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644. Deploy pre-seeded `known_hosts` with verified fingerprints for github.com and internal git servers (avoids TOFU, prevents leaking internal hostnames). Set `HashKnownHosts yes` in ssh config.
 - **GNOME Keyring conflict**: GNOME Keyring's SSH agent does not support FIDO2 keys — breaks signing and auth. Disable by removing `/etc/xdg/autostart/gnome-keyring-ssh.desktop` (or `mkdir -p ~/.config/autostart && cp /etc/xdg/autostart/gnome-keyring-ssh.desktop ~/.config/autostart/ && echo Hidden=true >> ~/.config/autostart/gnome-keyring-ssh.desktop`). Use OpenSSH's ssh-agent instead. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
 - **Port knocking**: dropped. Unencrypted, replay-vulnerable. Tailscale replaces this — no open port to hide.
 
@@ -755,6 +758,16 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 - Cloud sessions (`claude.ai/code`) for working on shared repos without laptop
 - No session sharing (Agent Teams / Remote Control are single-user) — git is the coordination layer
 
+**Privacy model for shared repos:**
+- **Separate repos for private work** — each person has their own private repos; shared repos for collaborative content only. Agents get fine-grained PATs scoped to only repos they need.
+- **`CLAUDE.local.md` for personal config** (gitignored) — internal infra names, personal workflow preferences, sandbox URLs. Shared `CLAUDE.md` stays generic (build commands, coding standards). Review CLAUDE.md changes in PRs — they are executable instructions.
+- **Feature branches as private workspaces** — work is private until a PR is opened. PRs are the visibility boundary.
+- **What's already isolated**: `CLAUDE.local.md` (per-machine), auto-memory (per-user, per-machine), session transcripts (per-user), worktree filesystems. Separate OS accounts on shared machines to protect `~/.claude/`.
+- **Commit message hygiene**: add CLAUDE.md rule — "Never include conversation context, user names, or personal details in commit messages or PR descriptions. Reference code, not people."
+- **For encrypted files in shared repos**: use transcrypt (transparent, `git diff` works) or SOPS+age (value-level encryption for config files). Skip git-secret (manual workflow too painful).
+- **For truly private notes**: Syncthing + Tailscale (peer-to-peer, no third party, E2E encrypted) instead of GitHub. Or private Gitea on Tailscale for git features without third-party trust.
+- **Watch**: Team Memory Sync (unreleased Claude Code feature) will share memories across team members per-repo — new privacy surface when it ships.
+
 **With non-technical family** (construction projects, planning):
 - Git repo (your workspace) → GitHub Pages with MkDocs Material (auto-published website family bookmarks on phone)
 - Google Forms embedded for decisions (countertop votes, approvals)
@@ -1000,8 +1013,8 @@ ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
 - Mullvad or ProtonVPN setup
 
 **Work profile:**
-- `oc login --web` to Konflux cluster (`kflux-prd-rh02`)
-- `podman login registry.redhat.io` (also brew.registry, stage.registry)
+- `oc login --web` to Konflux cluster (name in CLAUDE.local.md)
+- `podman login registry.redhat.io` (+ internal registries listed in CLAUDE.local.md)
 - Red Hat entitlements in `/etc/pki/entitlement/*.pem` — needed for RPM lockfile updates. RHEL CSB should have these pre-provisioned; Fedora needs `subscription-manager`.
 - `gcloud auth login` + `gcloud auth application-default login`
 - `acli` login — 8 config files in `~/.config/acli/`: admin, assets, brie, confluence, global_auth, global, jira, rovodev
