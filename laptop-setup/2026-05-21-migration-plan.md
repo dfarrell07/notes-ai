@@ -155,13 +155,16 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
+- **BIOS hardening** (ThinkPad): set Supervisor Password, disable USB/PXE boot, set Thunderbolt security to "Secure Connect" (`boltctl` manages runtime authorization), disable Intel AMT if unused. Without BIOS password, physical access bypasses Secure Boot.
+- **USBGuard**: deploy on Fedora (not just CSB). Whitelist YubiKey (`1050:0407`) and Moonlander (`3297:1969`), block all other USB devices by default. `usbguard generate-policy` for initial setup.
 - **Kernel**: blacklist intel_vbtn. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=2` (disable io_uring for unprivileged users — richest kernel exploit surface 2022-2025), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
 - **IPv6**: either disable (`sysctl net.ipv6.conf.all.disable_ipv6=1`) or mirror all IPv4 firewall rules for IPv6. IPv6 traffic can bypass VPN tunnels and firewall rules if only IPv4 is configured.
 - **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
 - **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
 - **Core dumps disabled**: `ulimit -c 0` in shell profile, `kernel.core_pattern=|/bin/false` in sysctl, `ProcessSizeMax=0` in coredump.conf. Prevents secrets from leaking to dump files.
 - **Encrypted swap**: use zram (no disk backing) or dm-crypt swap with random key at boot. `shred` is unreliable on btrfs/SSDs — prefer process substitution over writing secrets to disk.
-- **umask 077**: set in zshrc — new files owner-only by default. Prevents `~/.claude/history.jsonl` and other files from being created world-readable.
+- **umask 077**: set in zshrc — new files owner-only by default. Also `chmod 700 ~/.claude` (parent dirs are 755 by default, exposing directory listing of 444MB+ of session transcripts). Set `cleanupPeriodDays` in Claude Code settings for explicit transcript retention.
+- **PATH ordering**: ensure `/usr/bin` before `~/.local/bin` AND `/home/linuxbrew/.linuxbrew/bin` — both are user-writable and can shadow system binaries via supply chain attacks (pip/npm/brew can drop trojans named `git`, `ssh`, `sudo`).
 - **fwupd**: `fwupdmgr get-updates && fwupdmgr update` in system role. UEFI/Thunderbolt/NVMe firmware updates.
 - **Outbound firewall (Linux)**: install OpenSnitch (`dnf install opensnitch`) for per-process outbound filtering (Linux equivalent of LuLu on Mac). Catches compromised MCP servers, supply chain attacks phoning home.
 - **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is world-listable.
