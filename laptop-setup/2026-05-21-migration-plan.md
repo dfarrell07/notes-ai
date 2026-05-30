@@ -28,7 +28,7 @@ Two dimensions control what gets installed:
 
 Ansible handles deterministic provisioning (packages, dotfiles, services, repos). A Claude Code skill wraps it to handle what Ansible can't — interactive auth, diagnostic review, post-run verification, and iterative fixing.
 
-**Skill invocation:** `/laptop-setup` or `make all`
+**Skill invocation:** `/laptop-setup` (wraps `make all` with pre-flight checks, output review, interactive auth, and smoke tests)
 
 **Skill phases:**
 1. **Pre-flight** — Claude checks: OS detection, YubiKey plugged in, vault passwords accessible, network connectivity, existing state (fresh vs re-run)
@@ -61,10 +61,10 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
   ansible.builtin.copy: ...
   when: profile == 'work'
 
-# OS gating pattern:
+# OS gating pattern (Fedora reports os_family as 'RedHat'):
 - name: Install i3
   ansible.builtin.dnf: ...
-  when: ansible_os_family == 'RedHat' or ansible_os_family == 'Fedora'
+  when: ansible_os_family == 'RedHat'
 
 # Tags match Makefile targets:
 # site.yml roles use tags: [dotfiles], [packages], [repos], [ssh], [desktop], [system], [redhat], [cloud], [distrobox], [claude]
@@ -147,7 +147,7 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 
 Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification).
 
-Claude Code skill: `/laptop-setup` — runs pre-flight → `make all` → reviews output → guides interactive auth → runs smoke tests → reports summary. Use this instead of bare `make all` for a guided, diagnostic setup experience.
+Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagnostics.
 
 ## What It Sets Up
 
@@ -288,7 +288,7 @@ acli, docker-ce, mullvad/protonvpn, gh-cli, google-chrome, google-cloud-sdk, rpm
 
 ### System (become: true, Linux only)
 
-Firewall, SSH hardening, and Tailscale config detailed in the Security section.
+Firewall, SSH hardening, and Tailscale config in the Security section. Remaining system-level config:
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
@@ -361,9 +361,6 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - MCP servers: work instance gets Atlassian MCP. Personal instance gets none or different set.
 - Sandbox: enable with `bubblewrap` (`dnf install bubblewrap socat`). Set `"sandbox": {"enabled": true}` in settings.
 
-- **Container registry auth**: tokens from vault via credential helper (docker-credential-secretservice), deployed to `~/.config/containers/auth.json` with mode 0600 (work profile)
-- **Distrobox**: Fedora dev container — safety valve for RHEL CSB (work profile on RHEL). See RHEL CSB Constraints section for full spec.
-
 ## Security
 
 ### Secrets Management
@@ -375,7 +372,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
   - Password files at `~/.vault_pass_critical`, `~/.vault_pass_infra`, `~/.vault_pass_dev` (all mode 0600, outside repo).
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets (critical: without this, `--check --diff` leaks decrypted vault content to terminal scrollback, tmux history, and Claude Code transcripts).
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
-- **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600. Note: Vertex AI vars are NOT in zshrc — they live in `~/.config/claude/work-env` (sourced by the `cw` alias) and direnv `.envrc` per project.
+- **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600.
 - **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Deployed as git template hook (`git config --global init.templateDir ~/.config/git/template`).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
@@ -545,7 +542,7 @@ Items that only apply to macOS (personal Mac desktop):
 
 **Services (launchd):** systemd units become launchd plists in `~/Library/LaunchAgents/`. Needed for: Claude Code Remote Control server (always use `--sandbox`), task queue poller, brew autoupdate, Homebrew ssh-agent (with `-t 28800` key lifetime).
 
-**SSH**: bind sshd to Tailscale IP only (`ListenAddress 100.x.y.z`). Use drop-in config at `/etc/ssh/sshd_config.d/` (survives macOS updates). Cipher hardening: sntrup761x25519-sha512, chacha20-poly1305, hmac-sha2-512-etm.
+**SSH**: bind sshd to Tailscale IP only (`ListenAddress 100.x.y.z`). Use drop-in config at `/etc/ssh/sshd_config.d/` (survives macOS updates). Hardened algorithms: KEX sntrup761x25519-sha512, cipher chacha20-poly1305, MAC hmac-sha2-512-etm.
 
 **iCloud**: disable Desktop & Documents sync, disable iCloud Keychain (use Bitwarden). Enable Advanced Data Protection. Store FileVault recovery key in KeePassXC, NOT iCloud.
 
@@ -685,7 +682,7 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 **Current gear:** ZSA Moonlander (custom cables, daily driver), Shokz (sport/safety).
 
 **AR glasses:**
-- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — wearable USB-C monitor. 1920x1200/eye (16:10), X1 chip (3DoF), 700 nits, electrochromic dimming, 82g. Terminal-readable at 14pt+ font. 2-4 hour sessions. **Has 4 microphones** (with noise cancellation) and speakers — same audio privacy concern as Even G2. No camera, no wireless radio. Do NOT install Nebula app on work devices. **Microphones mean the same National Intelligence Law concern applies** (XREAL is Beijing-based). Use for personal only, or accept the mic risk for work if no sensitive discussions are nearby.
+- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — wearable USB-C monitor. 1920x1200/eye (16:10), X1 chip (3DoF), 700 nits, electrochromic dimming, 82g. Terminal-readable at 14pt+ font. 2-4 hour sessions. **Has 4 microphones** (with noise cancellation) and speakers. No camera, no wireless radio. Do NOT install Nebula app on work devices. **Microphones + China's National Intelligence Law** (XREAL is Beijing-based) — use for personal only, or accept the mic risk for work if no sensitive discussions are nearby.
 
 **Keyboards:**
 - **Moonlander** (already owned) — works with iPad/phone via USB-C direct (recognized as USB HID). Disable RGB LEDs to avoid iPad power complaints. Tethered but functional. Primary desk keyboard.
@@ -752,7 +749,7 @@ Phone side:
 - Optional: work or personal Claude app to help compose issue specs (GitHub connector read-only)
 
 Laptop side:
-- Systemd timer (every 2 min, oneshot prevents overlap) — see Task Queue Repo section for full design
+- Systemd timer (every 2 min, `flock` prevents overlap) — see Task Queue Repo section for full design
 - Safety: `--allowedTools` whitelist per repo, `--max-turns 50`, `--max-budget-usd 5.00`, 30 min timeout
 
 Security:
@@ -889,7 +886,7 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 ### Testing
 
 **CI (GitHub Actions) — runs on every push/PR:**
-Following the same pattern as claude-skills repo (shellcheck, yamllint, markdownlint, gitlint, dependabot for GHA + npm, actions pinned to commit SHAs):
+Following the same pattern as claude-skills repo (shellcheck, yamllint, markdownlint, dependabot for GHA + npm, actions pinned to commit SHAs):
 ```yaml
 # .github/workflows/linting.yml
 jobs:
@@ -898,7 +895,6 @@ jobs:
   shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
   markdownlint:     # npx markdownlint-cli2 "**/*.md"
   syntax-check:     # ansible-playbook --syntax-check site.yml
-  gitlint:          # gitlint --commits origin/main..HEAD (PR only)
 ```
 
 **Molecule test infrastructure** (two scenarios):
@@ -941,7 +937,6 @@ ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
 **Configs to carry from claude-skills repo:**
 - `.yamllint` (140 char lines, truthy ignore for GHA)
 - `.markdownlint.yml` (140 char lines, no code block limit)
-- `.gitlint` (ignore body-is-missing, ignore dependabot)
 - `.github/dependabot.yml` (monthly GHA, weekly npm)
 - `.github/workflows/stale.yml` (120-day issues, 14-day PRs)
 - `package.json` with markdownlint-cli2 devDep
