@@ -35,7 +35,7 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
 2. **Ansible execution** — runs `ansible-playbook site.yml` with appropriate tags/profile, streams output
 3. **Output review** — Claude reviews Ansible output for failures, diagnoses root causes, suggests or applies fixes
 4. **Interactive auth** — guides user through manual auth steps that Ansible can't automate: `gh auth login`, `oc login --web`, `gcloud auth login`, `acli` login, Bitwarden setup
-5. **Post-run verification** — runs smoke tests (`ssh -T git@github.com`, `claude-work --version`, `podman info`, etc.), reports results
+5. **Post-run verification** — runs smoke tests (`ssh -T git@github.com`, `claude --version`, `podman info`, etc.), reports results
 6. **Summary** — what succeeded, what failed, what needs manual attention, what to run next
 
 **Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
@@ -328,7 +328,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - Vertex AI (work): prompts go to Google infrastructure, not Anthropic. No training. Customer-controlled retention. Telemetry to Anthropic off by default.
 - Anthropic Pro (personal): turn off "Improve Claude" in privacy settings (5-year retention if on, 30 days if off). No ZDR or DPA on Pro plan. Consumer terms, not commercial.
 - Disable non-essential telemetry: `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in both instances.
-- Cross-contamination: running personal instance while cd'd into a work repo sends work code through Anthropic. Wrapper scripts should verify current directory is appropriate for the instance before launching.
+- Cross-contamination: running personal instance while cd'd into a work repo sends work code through Anthropic. The `ccp()` wrapper verifies the current directory before launching (see shell aliases).
 
 `~/.claude-work/CLAUDE.md` and `~/.claude-personal/CLAUDE.md` (keep under 150 lines each):
 - Always use `--signoff` (`-s`) on git commits
@@ -421,7 +421,7 @@ Mitigations:
 
 **Auth stack (strongest to weakest):**
 1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian, Slack. Phishing-resistant, passwordless. ~20 of 100 slots.
-2. **FIDO2 security key** (non-resident, zero slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
+2. **FIDO2 security key** (non-resident, uses no resident key slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
 3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 64 OATH slots (32 on firmware pre-5.7, 64 on 5.7+). Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
 4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 25+ chars), KeePassXC vault, device logins, recovery email.
 5. **Recovery codes** — all in KeePassXC on encrypted USB (2 copies, 2 physical locations). Never in Bitwarden (locked out = need these).
@@ -464,13 +464,13 @@ Mitigations:
 - GitHub Issues as task queue: phone can create issues but cannot execute anything on laptop directly.
 - If phone is extracted (Cellebrite, border search): attacker gets GitHub token, can create issues. Mitigated by `--allowedTools` whitelist on laptop's task processor + PRs require human review + container isolation.
 - Strong lockscreen PIN (not biometric alone — biometric can be compelled in some jurisdictions).
-- **Pixel hardening**: enable Advanced Protection Mode (Android 16, one toggle — hardware USB blocking, auto-reboot 72h, blocks sideloading). Use Work Profile via Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile). Lockdown Mode (Power+Volume Up) before border crossings — disables biometrics, forces PIN. Set USB default to "No data transfer."
+- **Pixel hardening**: enable Advanced Protection Mode (Android 16, one toggle — hardware USB blocking, auto-reboot 72h, blocks sideloading). Use Work Profile via Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile). Lockdown Mode (long-press Power → Lockdown) before border crossings — disables biometrics, forces PIN. Set USB default to "No data transfer."
 - **GrapheneOS** (optional, for frequent travelers): 18h auto-reboot (vs 72h stock), duress PIN (silent factory reset), stronger USB blocking. Compatible with GitHub Mobile, Claude app via Sandboxed Google Play.
 
 ### Travel
 
 - Shut down laptop (not sleep) when crossing borders — LUKS keys are in memory during sleep.
-- Remove phone from Tailscale network before travel, re-add after.
+- If phone is ever added to Tailscale, remove it before travel and re-add after.
 - Consider: travel with clean phone (factory reset), no GitHub auth, reconnect after clearing border.
 - `authorized_keys`: remove any non-YubiKey entries before travel.
 - Review and revoke unnecessary cloud CLI sessions (`gcloud auth revoke`, `gh auth logout`).
@@ -496,7 +496,7 @@ Mitigations:
 - `git config --global core.fsmonitor false` — prevent fsmonitor code execution
 - Remove `git config --global safe.directory /tmp` (current machine has this — allows malicious repos in world-writable /tmp to execute hooks)
 - Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc **and hooks in settings.json** before running Claude in any new repo. Hooks execute outside sandbox with full user privileges (CVE-2025-59536). Consider `disableAllHooks` or `allowManagedHooksOnly` in managed settings.
-- Consider enabling Claude Code sandbox (`bubblewrap`): `"sandbox": {"enabled": true}` in settings
+- Enable Claude Code sandbox (`bubblewrap`): `"sandbox": {"enabled": true}` in settings
 
 **Supply chain incidents (2026):**
 - Claude Code npm: source leak + concurrent axios trojan (March 2026). Pin exact npm versions.
@@ -572,7 +572,7 @@ RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation i
 **Likely blocked without IT exception:**
 - **Third-party repos** (Tailscale, Mullvad/ProtonVPN, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
 - **Homebrew/Linuxbrew** — installs outside RPM trust database, blocked by fapolicyd if enforcing
-- **pip --user, go install, npm global** — binaries in ~/  paths blocked by fapolicyd (deny-all, permit-by-exception for RPM-trusted paths)
+- **pip --user, go install, npm global** — binaries in ~/ paths blocked by fapolicyd (deny-all, permit-by-exception for RPM-trusted paths)
 - **Custom firewall rules** — STIG requires drop zone, admin-managed
 - **Kernel module changes** — `/etc/modprobe.d/` is root-owned, may require `module.sig_enforce=1`
 - **Docker** — not in RHEL repos since RHEL 8, third-party repo required
