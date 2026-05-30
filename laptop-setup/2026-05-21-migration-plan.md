@@ -202,6 +202,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **K8s code-gen:** controller-gen, client-gen, informer-gen, lister-gen, deepcopy-gen, applyconfiguration-gen, defaulter-gen
 - **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype.
 - **npm (dev):** commitlint (replaces gitlint — unmaintained 3+ years). Conventional Commits config, runs via husky git hook.
+- **Scripts (curl to /usr/local/bin):** transcrypt (transparent git encryption, pure Bash). SOPS + age (value-level encryption for structured config files).
 
 **Work profile:**
 - **Red Hat:** redhat-internal-cert-install, redhat-internal-openvpn-profiles, acli
@@ -764,9 +765,52 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 - **Feature branches as private workspaces** — work is private until a PR is opened. PRs are the visibility boundary.
 - **What's already isolated**: `CLAUDE.local.md` (per-machine), auto-memory (per-user, per-machine), session transcripts (per-user), worktree filesystems. Separate OS accounts on shared machines to protect `~/.claude/`.
 - **Commit message hygiene**: add CLAUDE.md rule — "Never include conversation context, user names, or personal details in commit messages or PR descriptions. Reference code, not people."
-- **For encrypted files in shared repos**: use transcrypt (transparent, `git diff` works) or SOPS+age (value-level encryption for config files). Skip git-secret (manual workflow too painful).
+- **For encrypted files in shared repos**: two-tool approach (see below).
 - **For truly private notes**: Syncthing + Tailscale (peer-to-peer, no third party, E2E encrypted) instead of GitHub. Or private Gitea on Tailscale for git features without third-party trust.
 - **Watch**: Team Memory Sync (unreleased Claude Code feature) will share memories across team members per-repo — new privacy surface when it ships.
+
+**Encrypted files in shared repos — two-tool approach:**
+
+Use **transcrypt** for transparent whole-file encryption and **SOPS+age** for structured config files:
+
+**transcrypt** (v2.3.2, pure Bash, actively maintained):
+- Transparent encryption via git clean/smudge filters — `git diff`, `git blame`, `git log -p` all work on decrypted content via textconv
+- AES-256-CBC with per-file HMAC-based deterministic salt (no phantom diffs)
+- Selective encryption via `.gitattributes`: `private/** filter=crypt diff=crypt merge=crypt`
+- **Contexts** feature: different passwords for different file sets (`--context=super` for admin-only files, default context for team files). Solves the "User A can see files User B can't" problem.
+- Key rotation via `--rekey` (git-crypt lacks this)
+- Claude Code compatibility: after `transcrypt` init, files are plaintext on disk — Claude reads/writes normally. Clean filter encrypts at `git add` transparently. `git diff`/`git status` show decrypted content.
+- Merge conflicts on encrypted files produce garbled markers — transcrypt includes a custom merge driver (`merge=crypt`) to handle this, but test before relying on it.
+- **Known issue**: Claude Code worktrees are broken with git-crypt (#58610) — transcrypt may have the same issue if `filter.crypt.required=true`. Test worktree creation.
+- Install: `dnf install openssl` + copy Bash script to `/usr/local/bin/`. No compilation. Does not need to remain installed after setup.
+
+**SOPS + age** (CNCF project + Filippo Valsorda):
+- Encrypts **values only** — keys/structure stay plaintext. `git diff` shows which fields changed (not what they changed to).
+- Supports YAML, JSON, INI, ENV. Does NOT support markdown (treats it as binary blob).
+- `.sops.yaml` for path-based rules: `path_regex: ^secrets/.*\.yaml$` + `encrypted_regex: "^(password|secret|token)$"` for selective field encryption.
+- Multiple recipients: each collaborator gets their own age key. Adding/removing via `sops updatekeys`. No shared password.
+- `community.sops` Ansible collection: drop-in vars plugin, auto-decrypts `*.sops.yaml` files. Can replace ansible-vault for variable files (keeps value-level encryption, better diffs, multi-recipient).
+- Claude Code sees encrypted values but readable structure — can help modify config files without seeing secrets.
+- Clean/smudge filters NOT recommended for SOPS (non-deterministic encryption causes phantom diffs). Use explicit `sops --encrypt`/`--decrypt` or Makefile targets.
+- CI: pass age private key as `SOPS_AGE_KEY` env var in GitHub Actions. No key file needed.
+
+**When to use which:**
+
+| Content | Tool | Why |
+|---|---|---|
+| Private notes/files in shared repo | transcrypt | Transparent, `git diff` works, contexts for access tiers |
+| Ansible vars with secrets | SOPS+age or ansible-vault | SOPS: value-level encryption, multi-recipient. Vault: simpler, built-in. |
+| Dotfiles with interpolated secrets | transcrypt | Whole-file encryption for templates with secrets |
+| Config files with some secret fields | SOPS+age | `encrypted_regex` encrypts only matching keys |
+| Markdown/plaintext | transcrypt (or separate repo) | SOPS can't do structured encryption on plaintext |
+
+**CI integration:**
+- Linting jobs (yamllint, ansible-lint, shellcheck): run without decryption. Exclude encrypted files via `.yamllint` ignore + `.ansible-lint` exclude_paths.
+- Molecule tests: pass vault passwords or transcrypt key via GitHub Actions secrets. Write to temp files, clean up after.
+- Syntax check: dummy vault password files suffice (Ansible doesn't decrypt during `--syntax-check`).
+- Dependabot/Renovate: unaffected — they don't touch encrypted files.
+
+**Task queue container**: install transcrypt + openssl in container image. Unlock before Claude runs. Pass key via `podman secret`, not env var (Claude can read env vars).
 
 **With non-technical family** (construction projects, planning):
 - Git repo (your workspace) → GitHub Pages with MkDocs Material (auto-published website family bookmarks on phone)
