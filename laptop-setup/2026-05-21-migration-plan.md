@@ -573,11 +573,26 @@ jobs:
   gitlint:          # gitlint --commits origin/main..HEAD (PR only)
 ```
 
-**Integration tests (manual, against VMs):**
-- **Fedora VM** (libvirt): spin up fresh Fedora VM, run `make all`, verify idempotency (second run = 0 changed). Fastest feedback loop — test before touching real hardware.
-- **macOS**: run `make all` on Mac desktop with `profile: personal`. Verify skipped roles, brew installs, dotfiles.
-- **RHEL CSB**: `make check` (dry run) first, then `make all` with graceful failure handling. Document what breaks.
-- **Idempotency**: every test runs the playbook twice. Second run must report 0 changed.
+**Molecule test infrastructure** (two scenarios):
+
+`molecule/container/` — fast feedback (seconds, runs in CI):
+- Podman container (Fedora latest), tests dotfiles, packages, config roles
+- Cannot test: systemd services, firewall, kernel modules, desktop
+- Runs on every PR via GitHub Actions
+
+`molecule/vm/` — full integration (minutes, local or self-hosted runner):
+- Vagrant + libvirt VM (Fedora latest box), tests everything including services
+- `dnf install libvirt vagrant vagrant-libvirt` (use Fedora-packaged Vagrant)
+- Idempotency: Molecule runs the playbook twice, asserts 0 changed on second run
+- Verification: `verify.yml` with Ansible assert tasks (packages present, configs correct, services running)
+- Snapshot/rollback for iterative dev: `virsh snapshot-create-as` before test, `virsh snapshot-revert` to retry
+
+`make test` runs both: `molecule test -s container && molecule test -s vm`
+
+**Platform-specific testing:**
+- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux.
+- **RHEL/CSB**: CentOS Stream 10 as proxy (what RHEL 10 is built from). Free Red Hat Developer Subscription for actual RHEL testing (16 systems).
+- **Full CI strategy**: containers on every PR (fast gate), VM on merge to main (thorough), macOS runner for macOS roles.
 
 **Smoke tests (`make smoke-test` / `scripts/smoke-test.sh`):**
 ```bash
