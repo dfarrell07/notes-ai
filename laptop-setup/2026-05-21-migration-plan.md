@@ -28,7 +28,7 @@ Two dimensions control what gets installed:
 
 Ansible handles deterministic provisioning (packages, dotfiles, services, repos). A Claude Code skill wraps it to handle what Ansible can't — interactive auth, diagnostic review, post-run verification, and iterative fixing.
 
-**Skill invocation:** `/laptop-setup` (wraps `make all` with pre-flight checks, output review, interactive auth, and smoke tests)
+**Skill invocation:** `/laptop-setup` (wraps `make all` with pre-flight checks, output review, interactive auth, and smoke tests). Note: Claude Code is installed by `make all` — first run on a fresh machine must use `make all` directly, not the skill.
 
 **Skill phases:**
 1. **Pre-flight** — Claude checks: OS detection, YubiKey plugged in, vault passwords accessible, network connectivity, existing state (fresh vs re-run)
@@ -74,10 +74,9 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 ```
 ~/laptop-setup/
 ├── CLAUDE.md                       # Project-level instructions for Claude Code
-├── skills/
-│   └── setup/SKILL.md              # Main setup skill (pre-flight → ansible → review → auth → verify)
 ├── .claude/
-│   ├── SKILLS.md                   # Skill index
+│   ├── skills/
+│   │   └── setup.md                # Main setup skill (pre-flight → ansible → review → auth → verify)
 │   └── rules/                      # Path-scoped rules for role-specific guidance
 ├── scripts/
 │   ├── preflight.sh                # Pre-flight checks (YubiKey, vault, network)
@@ -85,16 +84,18 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 │   └── auth-guide.sh               # Interactive auth step guidance
 ├── ansible.cfg                     # become: false, vault_identity_list, yaml stdout callback
 ├── Makefile
-├── site.yml                        # two plays: system (become: true) + user (become: false)
+├── site.yml                        # two plays: system (become: true, --ask-become-pass) + user (become: false)
 ├── requirements.yml                # pinned collection versions (community.general, containers.podman)
 ├── default.config.yml              # profile: work, os-specific defaults
-├── config.yml                      # gitignored overrides (set profile, toggle features)
+├── config.yml                      # gitignored overrides (optional — default.config.yml has all defaults)
 ├── .ansible-lint                   # profile: production, FQCN required
 ├── .yamllint
 ├── inventory/localhost.yml
 ├── group_vars/all/
 │   ├── repos.yml                   # ~114 git repos
-│   └── vault.yml                   # ansible-vault encrypted: SSH keys, registry auth, env vars
+│   ├── vault_critical.yml          # ansible-vault --encrypt-vault-id critical: SSH keys, production creds
+│   ├── vault_infra.yml             # ansible-vault --encrypt-vault-id infra: registry tokens, API keys
+│   └── vault_dev.yml               # ansible-vault --encrypt-vault-id dev: env vars, non-sensitive config
 └── roles/
     ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
@@ -127,6 +128,23 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
     └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal), task queue poller (systemd timer + script)
 ```
 
+**Role ordering in site.yml** (dependencies flow top-down):
+1. `common` — OS detection, profile setup, prerequisite dirs
+2. `repos_dnf` — third-party RPM repos (must precede packages)
+3. `packages` — all install methods (dnf, brew, binary, go, pip, npm)
+4. `dotfiles` — config files (may reference installed binaries)
+5. `ssh` — keys from vault (needs dirs from common)
+6. `git_repos` — clone repos (needs gh from packages, SSH keys)
+7. `redhat` — CA certs, VPN (work profile, needs repos_dnf)
+8. `containers` — podman/docker config, registry auth
+9. `cloud_tools` — OpenShift/K8s/cloud CLI binaries
+10. `desktop` — i3, Alacritty, zsh (needs packages)
+11. `system` — firewall, kernel, services (become: true)
+12. `distrobox` — Fedora container (needs podman from packages)
+13. `claude` — Claude Code install, instance config, task queue (needs npm from packages)
+
+**Sudo handling:** `make all` passes `--ask-become-pass` for the system play. Alternatively, store the sudo password in vault and use `ansible_become_password` variable with `--become-password-file`. On macOS, `become` uses the same pattern but targets different privilege escalation.
+
 ### Makefile Targets
 
 | Target | Sudo? (Linux) | What it does |
@@ -145,7 +163,7 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 | `make cloud` | yes | Cloud CLIs |
 | `make distrobox` | no | Distrobox + Fedora container |
 
-Utilities: `make check` (dry run), `make diff` (dotfile diffs), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification).
+Utilities: `make check` (dry run — limited: `shell:`/`command:`/binary downloads are skipped in `--check` mode), `make diff` (dotfile diffs via `--check --diff --tags dotfiles`), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification, local-only — needs YubiKey/Tailscale hardware).
 
 Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagnostics.
 
@@ -374,7 +392,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets (critical: without this, `--check --diff` leaks decrypted vault content to terminal scrollback, tmux history, and Claude Code transcripts).
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600.
-- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`, `*.vault_pass`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Deployed as git template hook (`git config --global init.templateDir ~/.config/git/template`).
+- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Deployed as git template hook (`git config --global init.templateDir ~/.config/git/template`).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
 ### Network
@@ -916,7 +934,7 @@ jobs:
 `make test` runs both: `molecule test -s container && molecule test -s vm`
 
 **Platform-specific testing:**
-- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux.
+- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux. CI must skip vault-dependent roles (SSH keys, registry auth) — vault passwords not available in CI. Use `--skip-tags ssh,redhat,containers` or stub secrets via GitHub Actions secrets for integration tests.
 - **RHEL/CSB**: CentOS Stream 10 as proxy (what RHEL 10 is built from). Free Red Hat Developer Subscription for actual RHEL testing (16 systems).
 - **Full CI strategy**: containers on every PR (fast gate), VM on merge to main (thorough), macOS runner for macOS roles.
 
