@@ -52,10 +52,6 @@ Run the full provisioning workflow:
    apply to this machine's profile. Skip any already completed (`gh auth status`).
 5. Run `scripts/smoke-test.sh`. Report pass/fail for each check.
 6. Summarize: what succeeded, what failed, what needs manual attention.
-
-On failure: read the error + role's tasks file, check if it's a known issue
-(CSB restriction, missing auth, network), suggest a fix. If approved, re-run
-with `--tags <role>`. Iterate until clean or surface unresolvable issues.
 ```
 
 **Implementation details for Ansible:**
@@ -334,7 +330,7 @@ acli, docker-ce, mullvad/protonvpn, gh-cli, google-chrome, google-cloud-sdk, rpm
 
 ### System (become: true, Linux only)
 
-Firewall, SSH hardening, and Tailscale config in the Security section. Remaining system-level config:
+Firewall, SSH hardening, and Tailscale config in the Security section. Remaining system and security hardening config:
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
@@ -481,7 +477,7 @@ Mitigations:
 
 **Google Advanced Protection**: enroll both personal and work accounts. Requires security key for all logins. Strongest Google protection.
 
-**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `shred -u export.csv`.
+**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `rm export.csv` (shred unreliable on SSDs — full-disk encryption is the protection).
 
 **Key rotation schedule:**
 - GitHub PATs: 30-day expiry (enforced at creation), auto-revoke expired
@@ -809,7 +805,7 @@ Security:
 
 Personal Anthropic Pro account. All remote features available.
 
-- **Remote Control**: `claude remote-control` as persistent server. Steer from claude.ai/code or Claude mobile app. No inbound ports, survives network drops.
+- **Remote Control**: `claude --remote-control` as persistent server. Steer from claude.ai/code or Claude mobile app. No inbound ports, survives network drops.
 - **Dispatch**: pair Claude mobile app with Claude Desktop. Send tasks from phone, machine runs them.
 - **Cloud sessions**: claude.ai/code → remote session against GitHub repos, no local machine needed. Teleport to local later.
 - **Routines**: scheduled or API-triggered cloud runs.
