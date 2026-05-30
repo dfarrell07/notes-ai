@@ -40,6 +40,30 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
 
 **Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
 
+**Skill file (`.claude/skills/setup.md`):**
+```markdown
+---
+name: laptop-setup
+description: Provision this machine with Ansible — pre-flight, run, review, auth, verify
+---
+# Workstation Setup
+
+Run the full provisioning workflow:
+
+1. Run `scripts/preflight.sh` — verify YubiKey plugged in, vault password files
+   exist (or prompt user to create them), network connectivity. Stop if critical
+   checks fail.
+2. Run `make all` (or a specific target if the user requested one). Stream output.
+3. Review the Ansible output. For each failure:
+   - Read the error and the role's tasks file to understand context
+   - Check if it's a known issue (CSB restriction, missing auth, network)
+   - Suggest a fix. If approved, apply it and re-run with `--tags <role>`
+4. Guide the user through interactive auth steps listed in Manual Setup that
+   apply to this machine's profile. Skip any already completed (`gh auth status`).
+5. Run `scripts/smoke-test.sh`. Report pass/fail for each check.
+6. Summarize: what succeeded, what failed, what needs manual attention.
+```
+
 **Implementation details for Ansible:**
 ```yaml
 # ansible.cfg
@@ -66,8 +90,9 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
   ansible.builtin.dnf: ...
   when: ansible_os_family == 'RedHat'
 
-# Tags match Makefile targets:
-# site.yml roles use tags: [dotfiles], [packages], [repos], [ssh], [desktop], [system], [redhat], [cloud], [distrobox], [claude]
+# Tags match Makefile targets (one per role):
+# common, repos_dnf, packages, dotfiles, ssh, repos, redhat, containers,
+# cloud, desktop, system, distrobox, claude, virtualization
 ```
 
 **File structure:**
@@ -84,7 +109,7 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 │   └── auth-guide.sh               # Interactive auth step guidance
 ├── ansible.cfg                     # become: false, vault_identity_list, yaml stdout callback
 ├── Makefile
-├── site.yml                        # two plays: system (become: true, --ask-become-pass) + user (become: false)
+├── site.yml                        # two plays: system (become: true) + user (become: false)
 ├── requirements.yml                # pinned collection versions (community.general, containers.podman)
 ├── default.config.yml              # profile: work, os-specific defaults
 ├── config.yml                      # gitignored overrides (optional — default.config.yml has all defaults)
@@ -143,7 +168,25 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 12. `distrobox` — Fedora container (needs podman from packages)
 13. `claude` — Claude Code install, instance config, task queue (needs npm from packages)
 
-**Sudo handling:** `make all` passes `--ask-become-pass` for the system play. Alternatively, store the sudo password in vault and use `ansible_become_password` variable with `--become-password-file`. On macOS, `become` uses the same pattern but targets different privilege escalation.
+**Sudo handling:** Makefile passes `--ask-become-pass` for targets that need sudo. Alternatively, set `ansible_become_password` in vault and use `--become-password-file`.
+
+**Makefile implementation pattern:**
+```makefile
+all:
+	ansible-playbook site.yml --ask-become-pass
+dotfiles:
+	ansible-playbook site.yml --tags dotfiles
+packages:
+	ansible-playbook site.yml --tags packages --ask-become-pass
+repos:
+	ansible-playbook site.yml --tags repos
+repos-ovnk:
+	ansible-playbook site.yml --tags repos -e repo_category=ovnk
+check:
+	ansible-playbook site.yml --check --diff --ask-become-pass
+lint:
+	ansible-lint && yamllint --strict .
+```
 
 ### Makefile Targets
 
@@ -161,7 +204,9 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 | `make system` | yes | Firewall, kernel, services |
 | `make redhat` | yes | CA certs and VPN |
 | `make cloud` | yes | Cloud CLIs |
+| `make containers` | no | Podman/Docker config, registry auth |
 | `make distrobox` | no | Distrobox + Fedora container |
+| `make claude` | no | Claude Code install + instance config |
 
 Utilities: `make check` (dry run — limited: `shell:`/`command:`/binary downloads are skipped in `--check` mode), `make diff` (dotfile diffs via `--check --diff --tags dotfiles`), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification, local-only — needs YubiKey/Tailscale hardware).
 
@@ -914,7 +959,7 @@ jobs:
   shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
   markdownlint:     # npx markdownlint-cli2 "**/*.md"
   commitlint:       # npx commitlint --from origin/main --to HEAD (PR only)
-  syntax-check:     # ansible-playbook --syntax-check site.yml
+  syntax-check:     # ansible-playbook --syntax-check site.yml (needs mock vault password files — vault_identity_list in ansible.cfg errors if files missing)
 ```
 
 **Molecule test infrastructure** (two scenarios):
@@ -922,6 +967,7 @@ jobs:
 `molecule/container/` — fast feedback (seconds, runs in CI):
 - Podman container (Fedora latest), tests dotfiles, packages, config roles
 - Cannot test: systemd services, firewall, kernel modules, desktop
+- Limitation: container runs as root, so `become: true` is a no-op — won't catch tasks that incorrectly escalate privileges
 - Runs on every PR via GitHub Actions
 
 `molecule/vm/` — full integration (minutes, local or self-hosted runner):
