@@ -179,7 +179,9 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **Shell**: zsh default, oh-my-zsh (git clone to `~/.oh-my-zsh`, not a package — idempotent check for existing dir)
 - **Claude Code**: install on all machines. Two isolated instances on work laptop (see below). Remote Control server (personal profile). Does NOT manage `~/.claude/` configs directly — handled by instance isolation.
 
-**Claude Code instance isolation (work laptop):**
+## Claude Code Configuration
+
+**Instance isolation (work laptop):**
 
 Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. Use direnv `.envrc` per project for auto-switching — explicitly `unset` the other context's vars. Never run both in the same working directory.
 
@@ -693,6 +695,8 @@ Two apps, different accounts, different capabilities:
 - Desktop: full local MCP + remote MCP
 
 Neither app replaces the git task queue for sending work to Claude Code.
+
+## Device Ecosystem
 
 ### iPad Pro (thin client + Claude app)
 
