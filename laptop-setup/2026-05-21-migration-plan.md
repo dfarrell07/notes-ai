@@ -16,13 +16,13 @@ Two dimensions control what gets installed:
 
 - **Ansible** — one tool for packages, dotfiles, services, secrets
 - **Distrobox** — run Fedora tools on RHEL CSB without root
-- **Alacritty** — replaces urxvt. GPU-accelerated, TOML config, Dracula theme, in Fedora repos
-- **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation.
+- **Alacritty** — replaces urxvt. GPU-accelerated, TOML config, Dracula theme, in Fedora repos. Alternative: Kitty (also in Fedora repos, adds ligatures + image protocol + SSH kitten)
+- **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation. **Watch**: 2026 leadership changes (PE/M&A CEO, dropped "Transparency" value, briefly removed "Always free" language) mirror LastPass/LogMeIn trajectory. Monitor; KeePassXC + Proton Pass are fallback options.
 - **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
 - **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
 - **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
 - **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (source-available, no public repo — required for GCP)
-- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533, not in repos), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
+- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533 patched in 2026.4.5 but not in Fedora repos — Ansible handles the use case), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
 
 ## Architecture: Ansible + Claude Code Skill
 
@@ -223,7 +223,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 **macOS:** aerospace.toml (i3-like tiling WM), macOS defaults (keyboard repeat, smart quotes off, Finder, Dock)
 
 Key custom settings to preserve:
-- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search/gnu-utils/command-not-found), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, `zstyle ':omz:update' mode auto`. Remove: `github` plugin, Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
+- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, `zstyle ':omz:update' mode disabled` (must appear before `source $ZSH/oh-my-zsh.sh` — auto-update conflicts with Ansible-managed config). Remove: `github` plugin, `command-not-found` (biggest startup slowdown — adds 200-300ms), `gnu-utils` (no-op on Linux, only useful on macOS), Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases. **Future**: consider Starship prompt (5-15ms render vs gallois 50-200ms, Rust, cross-shell) as hybrid replacement — set `ZSH_THEME=""` and add `eval "$(starship init zsh)"` after oh-my-zsh source.
 
   **Shell aliases and functions:**
   ```bash
@@ -346,11 +346,11 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **umask 077**: set in zshrc — new files owner-only by default. Also `chmod 700 ~/.claude` (parent dirs are 755 by default, exposing directory listing of 444MB+ of session transcripts). Set `cleanupPeriodDays` in Claude Code settings for explicit transcript retention.
 - **PATH ordering**: ensure `/usr/bin` before `~/.local/bin` AND `/home/linuxbrew/.linuxbrew/bin` — both are user-writable and can shadow system binaries via supply chain attacks (pip/npm/brew can drop trojans named `git`, `ssh`, `sudo`).
 - **fwupd**: `fwupdmgr get-updates && fwupdmgr update` in system role. UEFI/Thunderbolt/NVMe firmware updates.
-- **Outbound firewall (Linux)**: install OpenSnitch (`dnf install opensnitch`) for per-process outbound filtering (Linux equivalent of LuLu on Mac). Catches compromised MCP servers, supply chain attacks phoning home.
+- **Outbound firewall (Linux)**: install OpenSnitch (`dnf install opensnitch`) for per-process outbound filtering (Linux equivalent of LuLu on Mac). Catches compromised MCP servers, supply chain attacks phoning home. **Caveats**: eBPF mode broken on Fedora 42 kernel 6.14 (use `proc` mode), NFQUEUE DNS interception conflicts with Tailscale/WireGuard (whitelist `tailscaled` + tailscale0 interface), cannot disable unprivileged user namespaces (OpenSnitch recommendation) while using rootless Podman. Not in Fedora repos (install from GitHub RPMs).
 - **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is world-listable.
-- **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
+- **X11 → Sway migration** (future, 2026 is the right window): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. i3 cannot run under XWayland — requires full Xorg session. Fedora is removing X11 sessions (GNOME X11 already dropped). Sway config reuses ~95% of i3 config (change `xrandr` → `sway output`, `feh` → `output bg`, `scrot` → `grim`+`slurp`). Claude Code sandbox works fine on Wayland. Start with dual i3+Sway setup.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
-- **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`. Exclude third-party repos from auto-updates (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update third-party packages manually.
+- **dnf-automatic**: `dnf5 install dnf5-plugin-automatic`, enable `dnf5-automatic.timer`. Config at `/etc/dnf/automatic.conf`: `apply_updates=yes`, `upgrade_type=default` in `[commands]` section. Exclude third-party repos from auto-updates by setting `enabled=0` in their `.repo` files (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update manually with `dnf5 upgrade --enablerepo=<name>`.
 - **Services**: fail2ban, libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). CUPS removed (September 2024 RCE, not needed if not printing; if kept: disable cups-browsed, restrict cupsd to localhost).
 - **Virtualization**: libvirt, qemu-kvm
 
@@ -1000,10 +1000,10 @@ jobs:
 **Molecule test infrastructure** (two scenarios):
 
 `molecule/container/` — fast feedback (seconds, runs in CI):
-- Podman container (Fedora latest), tests dotfiles, packages, config roles
-- Cannot test: systemd services, firewall, kernel modules, desktop
+- Podman container (Fedora latest), tests dotfiles, packages, config roles. Use full registry paths (`docker.io/geerlingguy/docker-fedora42-ansible:latest`). Requires `containers.podman` collection installed.
+- systemd in containers works with `privileged: true` + `command: /usr/sbin/init` + cgroup v2 volume mount (`:rw`)
 - Limitation: container runs as root, so `become: true` is a no-op — won't catch tasks that incorrectly escalate privileges
-- Runs on every PR via GitHub Actions
+- Runs on every PR via GitHub Actions (Podman 4.9.3 pre-installed on ubuntu-24.04)
 
 `molecule/vm/` — full integration (minutes, local or self-hosted runner):
 - Vagrant + libvirt VM (Fedora latest box), tests everything including services
@@ -1015,7 +1015,7 @@ jobs:
 `make test` runs both: `molecule test -s container && molecule test -s vm`
 
 **Platform-specific testing:**
-- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux. CI must skip vault-dependent roles (SSH keys, registry auth) — vault passwords not available in CI. Use `--skip-tags ssh,redhat,containers` or stub secrets via GitHub Actions secrets for integration tests.
+- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux. **Podman does NOT work on macOS runners** (no nested virtualization) — use Docker driver for macOS Molecule scenario. CI must skip vault-dependent roles (SSH keys, registry auth) — vault passwords not available in CI. Use `--skip-tags ssh,redhat,containers` or stub secrets via GitHub Actions secrets for integration tests.
 - **RHEL/CSB**: CentOS Stream 10 as proxy (what RHEL 10 is built from). Free Red Hat Developer Subscription for actual RHEL testing (16 systems).
 - **Full CI strategy**: containers on every PR (fast gate), VM on merge to main (thorough), macOS runner for macOS roles.
 
