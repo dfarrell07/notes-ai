@@ -170,7 +170,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is world-listable.
 - **X11 → Sway migration** (future): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. Plan for migration when ready.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
-- **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`
+- **dnf-automatic**: enable `dnf5-automatic.timer`, config: `apply_updates=yes`, `upgrade_type=default`. Exclude third-party repos from auto-updates (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update third-party packages manually.
 - **Services**: fail2ban, libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). CUPS removed (September 2024 RCE, not needed if not printing; if kept: disable cups-browsed, restrict cupsd to localhost).
 - **Virtualization**: libvirt, qemu-kvm
 
@@ -338,7 +338,7 @@ Mitigations:
 
 - `become: false` is the default in `ansible.cfg`. Only the system play and specific tasks escalate.
 - No play-level `become: true` on the user play — individual tasks only when genuinely needed.
-- Sudo password from vault, not hardcoded.
+- Sudo password from vault, not hardcoded. Set `become_exe: /usr/bin/sudo` in ansible.cfg (Ansible searches PATH for sudo — a trojan `~/.local/bin/sudo` could intercept the become password).
 - All module names use FQCN (`ansible.builtin.copy`, not `copy`).
 - All `shell:`/`command:` tasks have `changed_when:` and idempotency guards (`creates:`, `when:`).
 - `requirements.yml` pins all external collection versions with explicit `source` URLs (Galaxy has no namespace protection against typosquatting — anyone can register `communitty.general`). Run `ansible-galaxy collection verify` after install. Consider `--keyring` GPG verification.
