@@ -28,17 +28,7 @@ Two dimensions control what gets installed:
 
 Ansible handles deterministic provisioning (packages, dotfiles, services, repos). A Claude Code skill wraps it to handle what Ansible can't — interactive auth, diagnostic review, post-run verification, and iterative fixing.
 
-**Skill invocation:** `/laptop-setup` (wraps `make all` with pre-flight checks, output review, interactive auth, and smoke tests). Note: Claude Code is installed by `make all` — first run on a fresh machine must use `make all` directly, not the skill.
-
-**Skill phases:**
-1. **Pre-flight** — Claude checks: OS detection, YubiKey plugged in, vault passwords accessible, network connectivity, existing state (fresh vs re-run)
-2. **Ansible execution** — runs `ansible-playbook site.yml` with appropriate tags/profile, streams output
-3. **Output review** — Claude reviews Ansible output for failures, diagnoses root causes, suggests or applies fixes
-4. **Interactive auth** — guides user through manual auth steps that Ansible can't automate: `gh auth login`, `oc login --web`, `gcloud auth login`, `acli` login, Bitwarden setup
-5. **Post-run verification** — runs smoke tests (`ssh -T git@github.com`, `claude --version`, `podman info`, etc.), reports results
-6. **Summary** — what succeeded, what failed, what needs manual attention, what to run next
-
-**Failure handling:** if a role fails, Claude reads the error, checks docs/known issues, suggests the fix. User approves, Claude re-runs just the failed role with `--tags`. Iterates until clean or surfaces unresolvable issues.
+**Skill invocation:** `/laptop-setup` — wraps `make all` with diagnostics. First run on a fresh machine must use `make all` directly (Claude Code not yet installed).
 
 **Skill file (`.claude/skills/setup.md`):**
 ```markdown
@@ -62,6 +52,10 @@ Run the full provisioning workflow:
    apply to this machine's profile. Skip any already completed (`gh auth status`).
 5. Run `scripts/smoke-test.sh`. Report pass/fail for each check.
 6. Summarize: what succeeded, what failed, what needs manual attention.
+
+On failure: read the error + role's tasks file, check if it's a known issue
+(CSB restriction, missing auth, network), suggest a fix. If approved, re-run
+with `--tags <role>`. Iterate until clean or surface unresolvable issues.
 ```
 
 **Implementation details for Ansible:**
@@ -117,6 +111,7 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 ├── .yamllint
 ├── inventory/localhost.yml
 ├── group_vars/all/
+│   ├── vars.yml                    # plaintext vars referencing vault_ prefixed secrets (ssh_key: "{{ vault_ssh_key }}")
 │   ├── repos.yml                   # ~114 git repos
 │   ├── vault_critical.yml          # ansible-vault --encrypt-vault-id critical: SSH keys, production creds
 │   ├── vault_infra.yml             # ansible-vault --encrypt-vault-id infra: registry tokens, API keys
@@ -124,22 +119,9 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 └── roles/
     ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
-    ├── packages/                   # install methods by source:
-    │   #   dnf: system packages, gh (gh-cli repo), acli (acli repo), gcloud (google repo)
-    │   #   brew: python3, node (+ mac-only: all CLI tools). gemini-cli dropped (Google killing free API June 2026)
-    │   #   binary download (/usr/local/bin): oc, kubectl, kind, kustomize, opm, openshift-install, grype, yq, helm
-    │   #   go install: controller-gen, gofumpt, govulncheck, gci, *-gen, golangci-lint
-    │   #   pip --user: anthropic, pydantic, rpm-lockfile-prototype
-    │   #   npm (via brew node): Claude Code
-    │   #   curl to ~/.local/bin: subctl, distrobox
-    │   #   dnf (new): tailscale, direnv, zoxide, fzf, bitwarden-cli, keepassxc, ansible-lint, xss-lock
-    │   #   versions pinned in variables — update by changing variable, re-run
-    │   #   ALL binary downloads verified: SHA256 checksums in vars, Ansible get_url checksum= param
-    │   #   cosign verify-blob for tools that publish Sigstore signatures (kubectl, grype)
-    │   #   pip: use --require-hashes (pip cache is NOT integrity-verified on reuse, unlike npm/go)
-    │   #   Container images: pin by digest, configure /etc/containers/policy.json for Sigstore verification (default is insecureAcceptAnything)
-    │   #   gitleaks: install for pre-commit hook (replaces grep patterns)
-    │   #   Homebrew PATH: ensure /usr/bin before linuxbrew/bin (linuxbrew is user-writable, can shadow system binaries)
+    ├── packages/                   # dnf, brew, binary download, go install, pip, npm, curl (see Packages section for full list)
+    │   #   versions pinned in variables, ALL binary downloads SHA256-verified
+    │   #   cosign for Sigstore tools, pip --require-hashes, container images pinned by digest
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
     ├── git_repos/                  # clone repos, add fork remotes, profile filters
@@ -159,7 +141,7 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 3. `packages` — all install methods (dnf, brew, binary, go, pip, npm)
 4. `dotfiles` — config files (may reference installed binaries)
 5. `ssh` — keys from vault (needs dirs from common)
-6. `git_repos` — clone repos (needs gh from packages, SSH keys)
+6. `git_repos` — clone repos (needs gh from packages; clones via HTTPS, SSH only for push)
 7. `redhat` — CA certs, VPN (work profile, needs repos_dnf)
 8. `containers` — podman/docker config, registry auth
 9. `cloud_tools` — OpenShift/K8s/cloud CLI binaries
@@ -942,7 +924,7 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 4. Git repos with category filtering → `make repos-ovnk` works
 5. Vault + SSH + Red Hat + containers → `ssh -T git@github.com` works
 6. System + remaining roles → `make all` idempotent
-7. Profile support → `make all` with `profile: personal` skips work-only roles
+7. Profile support → `make all` with `-e profile=personal` (or set in `config.yml`) skips work-only roles
 8. Task queue repo → create private repo, laptop-side issue poller + `claude -p` runner
 9. Multi-OS → test on macOS, adjust conditionals
 10. Distrobox dev container → if CSB blocks host tools, full dev environment inside Fedora container
