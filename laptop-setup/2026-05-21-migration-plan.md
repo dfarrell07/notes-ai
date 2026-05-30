@@ -159,7 +159,8 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **OpenShift/K8s:** oc, kubectl, kind, kustomize, helm, opm, subctl, openshift-install, gcloud, aws
 - **Dev:** gh, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype (verify ≥v0.104.1, CVE-2025-65965 credential leak in earlier versions), ansible-lint
 - **K8s code-gen:** controller-gen, client-gen, informer-gen, lister-gen, deepcopy-gen, applyconfiguration-gen, defaulter-gen
-- **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype. Note: gitlint dropped (unmaintained 3+ years, supply chain risk).
+- **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype.
+- **npm (dev):** commitlint (replaces gitlint — unmaintained 3+ years). Conventional Commits config, runs via husky git hook.
 
 **Work profile:**
 - **Red Hat:** redhat-internal-cert-install, redhat-internal-openvpn-profiles, acli
@@ -894,6 +895,7 @@ jobs:
   yamllint:         # yamllint --strict .
   shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
   markdownlint:     # npx markdownlint-cli2 "**/*.md"
+  commitlint:       # npx commitlint --from origin/main --to HEAD (PR only)
   syntax-check:     # ansible-playbook --syntax-check site.yml
 ```
 
@@ -939,7 +941,9 @@ ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
 - `.markdownlint.yml` (140 char lines, no code block limit)
 - `.github/dependabot.yml` (monthly GHA, weekly npm)
 - `.github/workflows/stale.yml` (120-day issues, 14-day PRs)
-- `package.json` with markdownlint-cli2 devDep
+- `commitlint.config.js` (Conventional Commits, scope enum matching role names)
+- `package.json` with markdownlint-cli2 + @commitlint/cli + @commitlint/config-conventional devDeps
+- `.husky/commit-msg` hook for local commitlint
 - Actions pinned to commit SHAs (not tags)
 
 ### Manual Setup
