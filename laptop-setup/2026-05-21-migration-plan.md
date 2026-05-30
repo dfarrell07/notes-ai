@@ -157,7 +157,7 @@ Firewall, SSH hardening, and Tailscale config detailed in the Security section.
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **BIOS hardening** (ThinkPad): set Supervisor Password, disable USB/PXE boot, set Thunderbolt security to "Secure Connect" (`boltctl` manages runtime authorization), disable Intel AMT if unused. Without BIOS password, physical access bypasses Secure Boot.
 - **USBGuard**: deploy on Fedora (not just CSB). Whitelist YubiKey (`1050:0407`) and Moonlander (`3297:1969`), block all other USB devices by default. `usbguard generate-policy` for initial setup.
-- **Kernel**: blacklist intel_vbtn. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=2` (disable io_uring for unprivileged users — richest kernel exploit surface 2022-2025), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
+- **Kernel**: blacklist intel_vbtn. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=1` (disable io_uring for unprivileged users; value 2 disables for ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
 - **IPv6**: either disable (`sysctl net.ipv6.conf.all.disable_ipv6=1`) or mirror all IPv4 firewall rules for IPv6. IPv6 traffic can bypass VPN tunnels and firewall rules if only IPv4 is configured.
 - **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
 - **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
@@ -229,7 +229,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 
 ### Secrets Management
 
-- **Ansible Vault**: AES-256 encryption. Tiered vault IDs with different trust levels:
+- **Ansible Vault**: AES-256-CTR with HMAC-SHA256 encryption. Tiered vault IDs with different trust levels:
   - **Critical** (SSH keys, production creds): password derived from YubiKey HMAC-SHA1 challenge-response (`ykchalresp -2 "memorized-pin"`). Exists in NO password manager. Both YubiKeys configured with same HMAC secret — **must program Slot 2 on both keys with identical secret (`ykman otp chalresp 2 <hex-secret>`) before first `ansible-vault encrypt`**. Paper backup of hex secret in fireproof safe.
   - **Infra** (registry tokens, API keys): password in KeePassXC (offline `.kdbx` on USB drive, master password + YubiKey).
   - **Dev** (env vars, non-sensitive config): password in Bitwarden (cloud, acceptable blast radius).
@@ -759,7 +759,7 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 **Current gear:** ZSA Moonlander (custom cables, daily driver), Shokz (sport/safety).
 
 **AR glasses:**
-- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — wearable USB-C monitor. 1920x1200/eye (16:10), X1 chip (3DoF), 700 nits, electrochromic dimming, 82g. Terminal-readable at 14pt+ font. 2-4 hour sessions. No mic, no camera, no wireless radio — safe for work. Do NOT install Nebula app on work devices.
+- **XREAL 1S** ($449 + Hub $49 + Rx ~$75 = ~$575) — wearable USB-C monitor. 1920x1200/eye (16:10), X1 chip (3DoF), 700 nits, electrochromic dimming, 82g. Terminal-readable at 14pt+ font. 2-4 hour sessions. **Has 4 microphones** (with noise cancellation) and speakers — same audio privacy concern as Even G2. No camera, no wireless radio. Do NOT install Nebula app on work devices. **Microphones mean the same National Intelligence Law concern applies** (XREAL is Beijing-based). Use for personal only, or accept the mic risk for work if no sensitive discussions are nearby.
 
 **Keyboards:**
 - **Moonlander** (already owned) — works with iPad/phone via USB-C direct (recognized as USB HID). Disable RGB LEDs to avoid iPad power complaints. Tethered but functional. Primary desk keyboard.
@@ -869,7 +869,7 @@ repo: submariner-operator
 
 **State machine via labels:** `queued` → `processing` → `done` / `failed`. Failed issues stay open with an error comment (exit code, stderr, branch name). Retry: remove `failed`, add `queued`.
 
-**Poller:** systemd timer (every 2 min after completion, `Type=oneshot` prevents overlap). Processes issues sequentially, oldest first. Branch naming: `claude/<issue-number>-<slug>`. Opens PR linking the issue, comments with progress. **Issue body passed via temp file to `claude -p --prompt-file`, never via shell argument** (prevents shell injection from crafted issue content). Poller authenticates with its own scoped PAT, not ambient `gh auth`.
+**Poller:** systemd timer (every 2 min). Poller script uses `flock` for overlap prevention (`Type=oneshot` alone does NOT prevent concurrent runs). Processes issues sequentially, oldest first. Branch naming: `claude/<issue-number>-<slug>`. Opens PR linking the issue, comments with progress. **Issue body passed via temp file to `claude -p --prompt-file`, never via shell argument** (prevents shell injection from crafted issue content). Poller authenticates with its own scoped PAT, not ambient `gh auth`.
 
 **Safety:** `--max-turns 50`, `--max-budget-usd 5.00`, `timeout 1800` (30 min). Systemd adds `MemoryMax=4G`, `CPUQuota=80%`.
 
@@ -903,7 +903,7 @@ See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementatio
 **Auth stack (strongest to weakest):**
 1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian, Slack. Phishing-resistant, passwordless. ~20 of 100 slots.
 2. **FIDO2 security key** (non-resident, zero slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
-3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 32 OATH slots. Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
+3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 64 OATH slots (32 on firmware pre-5.7, 64 on 5.7+). Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
 4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 25+ chars), KeePassXC vault, device logins, recovery email.
 5. **Recovery codes** — all in KeePassXC on encrypted USB (2 copies, 2 physical locations). Never in Bitwarden (locked out = need these).
 6. **SMS 2FA** — removed from ALL accounts. Zero exceptions.
