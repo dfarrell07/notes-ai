@@ -132,12 +132,12 @@ install_vpn: true           # mullvad (replaced expressvpn)
 
 **Role ordering in site.yml** (three plays, dependencies flow top-down):
 
-*Play 1 — Host system (become: true):*
-1. `common` — OS detection, profile setup, prerequisite dirs, **CSB detection** (sets `csb_restricted`, `fapolicyd_enforcing`, `sudo_unrestricted`, `needs_container_tier` facts — all checks run without root)
-2. `repos_dnf` — third-party RPM repos (must precede packages). Uses `block/rescue` on CSB — appends failures to `csb_failures` list with IT ticket templates
-3. `system` — firewall, kernel modules, sysctl, services (become: true)
+*Play 1 — Host system (become: true, tagged `become`):*
+1. `repos_dnf` — third-party RPM repos (must precede packages). Uses `block/rescue` on CSB — appends failures to `csb_failures` list with IT ticket templates
+2. `system` — firewall, kernel modules, sysctl, services
 
 *Play 2 — Host user (become: false, per-task escalation via `become: true` + tag `become`):*
+3. `common` — OS detection, profile setup, prerequisite dirs, **CSB detection** (sets `csb_restricted`, `fapolicyd_enforcing`, `sudo_unrestricted`, `needs_container_tier` facts — all run without root). Tagged `always` so it runs even with `--skip-tags become`. Must be in Play 2 so `make minimal` can access CSB facts.
 4. `packages` — all install methods (dnf, brew, binary, go, pip, npm). dnf tasks use per-task `become: true` tagged `become` — `make minimal` skips these via `--skip-tags become`
 5. `dotfiles` — config files (may reference installed binaries)
 6. `ssh` — keys from vault (needs dirs from common)
@@ -149,7 +149,7 @@ install_vpn: true           # mullvad (replaced expressvpn)
 12. `distrobox_create` — create Toolbx/Distrobox container, register via `add_host` for Play 3
 13. `claude` — Claude Code install via native binary, instance config, task queue
 
-*Play 3 — Container provisioning (connection: containers.podman.podman, auto-skipped on Fedora):*
+*Play 3 — Container (connection: containers.podman.podman, auto-skipped on Fedora):*
 14. `container_packages` — dnf packages inside the Fedora container
 15. `container_binaries` — oc, kubectl, grype, gh, Go tools inside the container
 
