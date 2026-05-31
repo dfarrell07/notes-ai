@@ -376,7 +376,11 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 
 **Instance isolation (work laptop):**
 
-Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. The `cw()`/`ccp()` wrappers are the primary isolation mechanism (not direnv — env vars are read once at startup, not updated mid-session). Never run both in the same working directory. Known bugs: session cross-contamination (#27658), branch swapping (#60295).
+Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account):
+- Use `cw`/`ccp` shell aliases (defined in zshrc) — wrap Claude in tmux with the correct env vars per instance.
+- Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value.
+- Wrappers are the primary isolation mechanism, not direnv (env vars read once at startup, not updated mid-session).
+- Never run both in the same working directory. Known bugs: cross-contamination (#27658), branch swapping (#60295).
 
 **Claude Code global config (both instances):**
 
@@ -526,7 +530,8 @@ Mitigations:
 - GitHub Issues as task queue: phone can create issues but cannot execute anything on laptop directly.
 - If phone is extracted (Cellebrite, border search): attacker gets GitHub token, can create issues. Mitigated by `--allowedTools` whitelist on laptop's task processor + PRs require human review + container isolation.
 - Strong lockscreen PIN (not biometric alone — biometric can be compelled in some jurisdictions).
-- **Pixel hardening**: enable Advanced Protection Mode (Android 16, one toggle — hardware USB blocking, auto-reboot 72h, blocks sideloading). Lockdown Mode (long-press Power → Lockdown) before border crossings — disables biometrics, forces PIN. Set USB default to "No data transfer." **Work Profile isolation**: use Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile) — but **install Shelter before enabling APM** (APM blocks sideloading/F-Droid). **Cannot use Shelter if Red Hat MDM is enrolled** (Android allows only one work profile). If MDM is on this device, skip Shelter and use MDM's work profile or a separate device.
+- **Pixel hardening**: enable Advanced Protection Mode (Android 16 — hardware USB blocking, auto-reboot 72h, blocks sideloading). Set USB default to "No data transfer." Lockdown Mode (long-press Power → Lockdown) before border crossings.
+- **Work Profile isolation**: Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile). **Install Shelter before enabling APM** (APM blocks sideloading). **Cannot use Shelter if Red Hat MDM is enrolled** — Android allows only one work profile. If MDM is on this device, use MDM's work profile or a separate device.
 - **GrapheneOS** (optional, for frequent travelers): 18h auto-reboot (vs 72h stock), duress PIN (silent factory reset), stronger USB blocking. Compatible with GitHub Mobile, Claude app via Sandboxed Google Play.
 
 ### Travel
