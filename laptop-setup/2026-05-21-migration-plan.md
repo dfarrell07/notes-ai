@@ -35,29 +35,14 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
 
 **Skill invocation:** `/laptop-setup` — wraps `make all` with diagnostics. First run on a fresh machine must use `make all` directly (Claude Code not yet installed).
 
-**Skill file (`.claude/skills/setup/SKILL.md`):**
-```markdown
----
-name: laptop-setup
-description: Provision this machine with Ansible — pre-flight, run, review, auth, verify
----
-# Workstation Setup
-
-Run the full provisioning workflow:
-
-1. Run `scripts/preflight.sh` — verify YubiKey plugged in, vault password files
-   exist (or prompt user to create them), network connectivity. Stop if critical
-   checks fail.
-2. Run `make all` (or a specific target if the user requested one). Stream output.
-3. Review the Ansible output. For each failure:
-   - Read the error and the role's tasks file to understand context
-   - Check if it's a known issue (CSB restriction, missing auth, network)
-   - Suggest a fix. If approved, apply it and re-run with `--tags <role>`
-4. Guide the user through interactive auth steps listed in Manual Setup that
-   apply to this machine's profile. Skip any already completed (`gh auth status`).
-5. Run `scripts/smoke-test.sh`. Report pass/fail for each check.
-6. Summarize: what succeeded, what failed, what needs manual attention.
-```
+**Skill file (`.claude/skills/setup/SKILL.md`)** — 7-phase workflow:
+1. **Pre-flight**: run `scripts/preflight.sh --json`, parse results, stop on critical failures
+2. **Detect environment**: determine OS, CSB status, sudo level. Suggest `make minimal` if restricted.
+3. **Run roles individually**: execute each `make <target>` in dependency order (not `make all` — enables per-role diagnosis). On failure: read the error + `references/troubleshooting.md`, classify as CSB restriction / missing auth / transient / bug, suggest fix. Never retry without user confirmation.
+4. **Interactive auth**: check status first (`gh auth status`, `oc whoami`), skip already-authenticated, prompt user for remaining.
+5. **Smoke test**: run `scripts/smoke-test.sh --json`, cross-reference failures with role results.
+6. **CSB report**: parse `csb-report.yml`, present IT ticket templates (RHEL CSB only).
+7. **Summary**: completed/failed/skipped roles, auth status, next steps.
 
 **Implementation details for Ansible:**
 ```yaml
@@ -152,8 +137,8 @@ install_vpn: true           # mullvad (replaced expressvpn)
 2. `repos_dnf` — third-party RPM repos (must precede packages). Uses `block/rescue` on CSB — appends failures to `csb_failures` list with IT ticket templates
 3. `system` — firewall, kernel modules, sysctl, services (become: true)
 
-*Play 2 — Host user (become: false):*
-4. `packages` — all install methods (dnf, brew, binary, go, pip, npm)
+*Play 2 — Host user (become: false, per-task escalation via `become: true` + tag `become`):*
+4. `packages` — all install methods (dnf, brew, binary, go, pip, npm). dnf tasks use per-task `become: true` tagged `become` — `make minimal` skips these via `--skip-tags become`
 5. `dotfiles` — config files (may reference installed binaries)
 6. `ssh` — keys from vault (needs dirs from common)
 7. `git_repos` — clone repos (needs gh from packages; clones via HTTPS, SSH only for push)
@@ -175,7 +160,7 @@ install_vpn: true           # mullvad (replaced expressvpn)
 all:           ansible-playbook site.yml --ask-become-pass
 minimal:       ansible-playbook site.yml --tags common,dotfiles,ssh,repos --skip-tags become
 container:     ansible-playbook site.yml --tags distrobox
-csb-audit:     scripts/preflight.sh --csb-audit
+csb-audit:     scripts/preflight.sh && ansible-playbook site.yml --tags csb_audit --check
 bootstrap:     sudo dnf install -y ansible-core git ykpers && ansible-galaxy collection install -r requirements.yml
 lint:          ansible-lint && yamllint --strict .
 ```
@@ -1074,16 +1059,18 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 
 ### Phases
 
-1. Skeleton + dotfiles → `make dotfiles` works
-2. **RHEL CSB recon** → `make check` on CSB, identify fapolicyd/sudo/USBGuard constraints early. Determines whether Distrobox is optional or required.
-3. Packages + third-party repos → `make packages` idempotent
-4. Git repos with category filtering → `make repos-ovnk` works
-5. Vault + SSH + Red Hat + containers → `ssh -T git@github.com` works
-6. System + remaining roles → `make all` idempotent
-7. Profile support → `make all` with `-e profile=personal` (or set in `config.yml`) skips work-only roles
-8. Task queue repo → create private repo, laptop-side issue poller + `claude -p` runner
-9. Multi-OS → test on macOS, adjust conditionals
-10. Distrobox dev container → if CSB blocks host tools, full dev environment inside Fedora container
+1. Skeleton: ansible.cfg, site.yml (three plays), Makefile, default.config.yml → `make lint` passes
+2. **CSB detection**: `common` role with `csb_detect.yml` → `make csb-audit` produces report
+3. Dotfiles + SSH → `make dotfiles && make ssh` works
+4. Packages + repos_dnf (with `block/rescue` for CSB) → `make packages` idempotent
+5. Git repos with category filtering → `make repos-ovnk` works
+6. Distrobox/Toolbx container + Play 3 → `make container` works, `make minimal` is the CSB day-one path
+7. Vault + Red Hat + containers → `ssh -T git@github.com` works
+8. System + remaining roles → `make all` idempotent on Fedora, partial on CSB (report generated)
+9. Profile support → `-e profile=personal` skips work-only roles
+10. Multi-OS → test on macOS, adjust conditionals
+11. Task queue → private repo, systemd poller + Podman-isolated `claude -p` runner
+12. Skill + scripts → `/laptop-setup` skill, preflight.sh, smoke-test.sh, troubleshooting.md
 
 ### Testing
 
