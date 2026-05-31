@@ -159,7 +159,7 @@ install_vpn: true           # mullvad (replaced expressvpn)
 ```makefile
 all:           ansible-playbook site.yml --ask-become-pass
 minimal:       ansible-playbook site.yml --tags common,dotfiles,ssh,repos --skip-tags become
-container:     ansible-playbook site.yml --tags distrobox
+container:     ansible-playbook site.yml --tags common,distrobox,container_packages,container_binaries
 csb-audit:     scripts/preflight.sh && ansible-playbook site.yml --tags csb_audit --check
 bootstrap:     sudo dnf install -y ansible-core git ykpers && ansible-galaxy collection install -r requirements.yml
 lint:          ansible-lint && yamllint --strict .
@@ -172,7 +172,7 @@ lint:          ansible-lint && yamllint --strict .
 | `make bootstrap` | yes | Install ansible-core, git, ykpers; install Galaxy collections |
 | `make all` | yes | Full setup — all roles, all three plays |
 | `make minimal` | **no** | CSB-safe: dotfiles + ssh + repos (no become, no IT tickets, productive in ~30 min) |
-| `make container` | no | Create/update Toolbx/Distrobox dev container |
+| `make container` | no | Create/update dev container + provision packages/binaries inside (Plays 2+3) |
 | `make container-rebuild` | no | Destroy and recreate the dev container |
 | `make csb-audit` | no | Detect CSB constraints, produce compatibility report with IT ticket templates |
 | `make update` | yes | Upgrade Galaxy collections + re-run full playbook |
@@ -1084,7 +1084,9 @@ jobs:
   shellcheck:       # find scripts -name "*.sh" -exec shellcheck -S warning {} +
   markdownlint:     # npx markdownlint-cli2 "**/*.md"
   commitlint:       # npx commitlint --from origin/main --to HEAD (PR only)
-  syntax-check:     # ansible-playbook --syntax-check site.yml (needs mock vault password files — vault_identity_list in ansible.cfg errors if files missing)
+  syntax-check:     # ansible-playbook --syntax-check site.yml
+                     # CI needs stub vault scripts (echo "dummy") — real scripts call ykchalresp/bw which aren't in CI
+                     # Alternatively: ANSIBLE_VAULT_PASSWORD_FILE=/dev/null with vault files excluded from syntax check
 ```
 
 **Molecule test infrastructure** (two scenarios):
