@@ -8,8 +8,13 @@ tags: [ansible, fedora, rhel-csb, macos, dotfiles, automation, i3, distrobox, ta
 
 Ansible project at `~/laptop-setup` to provision development machines (kept at `~/` not `~/src/` — needed before the repo layout exists). Uses Geerling's config override pattern: `default.config.yml` (shipped) + `config.yml` (gitignored overrides).
 
+**Target machines:**
+- **Work laptop**: RHEL CSB (Corporate Standard Build) — primary development machine. Hardened, IT-managed. Most dev tools run inside Distrobox/Toolbx Fedora container.
+- **Personal Mac desktop**: macOS — always-on anchor for Remote Control, overnight automation, personal projects.
+- **Personal laptop**: Pixelbook Go (ChromeOS + Crostini) — light personal dev, thin client to Mac/laptop.
+
 Two dimensions control what gets installed:
-- **OS** (`os_family`: fedora/rhel/darwin/debian) — determines *how* (dnf vs brew vs apt, systemd vs launchd, paths)
+- **OS** (`os_family`: fedora/rhel/darwin/debian) — determines *how* (dnf vs brew vs apt, systemd vs launchd, paths). Note: Fedora-specific details (kernel 6.19, Podman 5.x/pasta, dnf5, zram defaults) may differ on RHEL 10 CSB.
 - **Profile** (`work` or `personal`) — determines *what* (Red Hat tools, Vertex AI, downstream repos, registry auth)
 
 ## Design Decisions
