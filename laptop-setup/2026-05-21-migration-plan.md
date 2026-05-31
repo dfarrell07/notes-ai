@@ -337,10 +337,12 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **BIOS hardening** (ThinkPad): set Supervisor Password, disable USB/PXE boot, set Thunderbolt security to "Secure Connect" (`boltctl` manages runtime authorization), disable Intel AMT if unused. Without BIOS password, physical access bypasses Secure Boot.
 - **USBGuard**: deploy on Fedora (not just CSB). Whitelist YubiKey (`1050:0407` — OTP+U2F+CCID default mode), Moonlander (`3297:1969`), and Moonlander DFU bootloader (`0483:df11` — needed for firmware flashing). Block all other USB devices by default. `usbguard generate-policy` for initial setup.
-- **Kernel**: blacklist intel_vbtn if non-convertible ThinkPad has false tablet-mode bug (keyboard/touchpad disabled at boot). Kernel 6.19 has improved DMI filtering — may not be needed. Test before adding. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=1` (disable io_uring for unprivileged users; value 2 disables for ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
+- **Kernel module**: blacklist intel_vbtn if non-convertible ThinkPad has false tablet-mode bug (keyboard/touchpad disabled at boot). Kernel 6.19 has improved DMI filtering — test before adding.
+- **Sysctl hardening**: `kernel.yama.ptrace_scope=1`, `kernel.kptr_restrict=1`, `kernel.io_uring_disabled=1` (unprivileged only; value 2 = ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1`.
+- **Secure Boot**: enable in BIOS. Required before kernel lockdown (`lockdown=integrity`).
 - **IPv6**: either disable (`sysctl net.ipv6.conf.all.disable_ipv6=1`) or mirror all IPv4 firewall rules for IPv6. IPv6 traffic can bypass VPN tunnels and firewall rules if only IPv4 is configured.
 - **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
-- **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
+- **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes).
 - **Core dumps disabled**: `ulimit -c 0` in shell profile, `kernel.core_pattern=|/bin/false` in sysctl, `ProcessSizeMax=0` in coredump.conf. Prevents secrets from leaking to dump files.
 - **Encrypted swap**: Fedora 42 uses zram-only by default (no disk-backed swap). Verify with `swapon --show` — should show only `/dev/zram0`. If disk swap exists (custom partitioning), use dm-crypt with random key at boot via `/etc/crypttab`. `shred` is unreliable on btrfs/SSDs — prefer process substitution over writing secrets to disk.
 - **umask 077**: set in zshrc — new files owner-only by default. Also `chmod 700 ~/.claude` (parent dirs are 755 by default, exposing directory listing of 444MB+ of session transcripts). Set `cleanupPeriodDays` in Claude Code settings for explicit transcript retention.
@@ -351,7 +353,8 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **X11 → Sway migration** (future, 2026 is the right window): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. i3 cannot run under XWayland — requires full Xorg session. Fedora is removing X11 sessions (GNOME X11 already dropped). Sway config reuses ~95% of i3 config (change `xrandr` → `sway output`, `feh` → `output bg`, `scrot` → `grim`+`slurp`). Claude Code sandbox works fine on Wayland. Start with dual i3+Sway setup.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
 - **dnf-automatic**: `dnf5 install dnf5-plugin-automatic`, enable `dnf5-automatic.timer`. Config at `/etc/dnf/automatic.conf`: `apply_updates=yes`, `upgrade_type=default` in `[commands]` section. Exclude third-party repos from auto-updates by setting `enabled=0` in their `.repo` files (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update manually with `dnf5 upgrade --enablerepo=<name>`.
-- **Services**: fail2ban (only if SSH is publicly exposed — unnecessary behind Tailscale with key-only FIDO2 auth), libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). Disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain — GTK, Qt, Chromium, and all Electron apps depend on it. If cupsd is kept, verify it listens only on localhost.
+- **Services**: libvirtd, dkms, mullvad/protonvpn (gated), fail2ban (only if SSH is publicly exposed). Docker disabled by default (start on demand).
+- **CUPS**: disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain (GTK/Qt/Chromium dependency). If cupsd is kept, verify it listens only on localhost.
 - **Virtualization**: libvirt, qemu-kvm
 
 ### User Environment (become: false)
@@ -445,7 +448,8 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Docker group**: never join. Docker group membership = passwordless root (can mount host filesystem, read `/etc/shadow`). Docker daemon disabled by default, started on demand only.
 - **Podman preferred**: rootless, daemonless, fork-exec model. 11 kernel capabilities vs Docker's 14.
 - **Docker rootless mode**: if Docker specifically needed, run rootless. No group membership required.
-- **Registry auth**: on Linux, use `podman login --authfile ~/.config/containers/auth.json` with `chmod 0600` (simpler than credential helpers — `docker-credential-secretservice` is not in Fedora repos, requires gnome-keyring/D-Bus on i3, and `podman login` doesn't write through helpers). On macOS, use `docker-credential-osxkeychain` via Homebrew with `credHelpers` in auth.json. Set `REGISTRY_AUTH_FILE` env var.
+- **Registry auth (Linux)**: `podman login --authfile ~/.config/containers/auth.json` + `chmod 0600`. Credential helpers skipped — `docker-credential-secretservice` is not in Fedora repos and requires gnome-keyring on i3.
+- **Registry auth (macOS)**: `docker-credential-osxkeychain` via Homebrew with `credHelpers` in auth.json. Set `REGISTRY_AUTH_FILE` env var.
 
 ### Cloud CLI Credentials
 
