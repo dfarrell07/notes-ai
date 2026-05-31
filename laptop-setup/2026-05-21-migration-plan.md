@@ -6,6 +6,21 @@ tags: [ansible, fedora, rhel-csb, macos, dotfiles, automation, i3, distrobox, ta
 
 # Workstation Setup Automation
 
+## Quick Start
+
+```bash
+# Fedora/RHEL
+sudo dnf install ansible-core git ykpers
+git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
+cd ~/laptop-setup && ansible-galaxy collection install -r requirements.yml
+make all          # full setup (needs sudo)
+make minimal      # CSB-safe, no sudo, productive in ~30 min
+```
+
+See [Bootstrap](#bootstrap-fresh-machine) for macOS and CSB-specific steps. See [Phases](#phases) for the build plan.
+
+---
+
 Ansible project at `~/laptop-setup` to provision development machines (kept at `~/` not `~/src/` — needed before the repo layout exists). Uses Geerling's config override pattern: `default.config.yml` (shipped) + `config.yml` (gitignored overrides).
 
 **Target machines:**
@@ -49,9 +64,10 @@ Ansible handles deterministic provisioning (packages, dotfiles, services, repos)
 # ansible.cfg
 [defaults]
 become = false
-vault_identity_list = critical@scripts/vault-pass-critical.sh, infra@scripts/vault-pass-infra.sh, dev@scripts/vault-pass-dev.sh
-default_vault_id_match = true
-stdout_callback = yaml
+vault_password_file = scripts/vault-pass.sh
+stdout_callback = default
+callback_result_format = yaml
+callbacks_enabled = profile_tasks, timer
 display_args_to_stdout = false
 collections_paths = ./collections
 roles_path = ./roles
@@ -108,23 +124,20 @@ install_vpn: true           # mullvad (replaced expressvpn)
 ├── group_vars/all/
 │   ├── vars.yml                    # plaintext vars referencing vault_ prefixed secrets (ssh_key: "{{ vault_ssh_key }}")
 │   ├── repos.yml                   # ~114 git repos
-│   ├── vault_critical.yml          # ansible-vault --encrypt-vault-id critical: SSH keys, production creds
-│   ├── vault_infra.yml             # ansible-vault --encrypt-vault-id infra: registry tokens, API keys
-│   └── vault_dev.yml               # ansible-vault --encrypt-vault-id dev: env vars, non-sensitive config
+│   └── vault.yml                   # ansible-vault encrypt: SSH keys, registry tokens, API keys, env vars
 └── roles/
     ├── common/                     # OS detection, profile setup, dirs (/run/user/$UID/ssh, ~/.config/git/template/hooks, etc.), prerequisites
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
-    ├── packages/                   # dnf, brew, binary download, go install, pip, npm, curl (see Packages section for full list)
-    │   #   versions pinned in variables, ALL binary downloads SHA256-verified
-    │   #   cosign for Sigstore tools, pip --require-hashes, container images pinned by digest
+    ├── packages/                   # dnf, brew, binary download, go install, pip, npm, curl (see Packages section)
+    │   #   includes cloud CLIs (oc, kubectl, helm) and virtualization (libvirt, qemu-kvm)
+    │   #   prefer dnf packages over binary downloads where available
+    │   #   ALL binary downloads SHA256-verified, versions pinned in variables
     ├── dotfiles/                   # config files (copy + template), OS-conditional
     ├── ssh/                        # SSH keys from vault
     ├── git_repos/                  # clone repos, add fork remotes, profile filters
     ├── redhat/                     # CA certs, VPN packages (work profile)
     ├── containers/                 # podman, docker, registry auth (work profile)
-    ├── virtualization/             # libvirt, qemu-kvm (Linux only)
-    ├── cloud_tools/                # OpenShift/K8s/cloud CLI binaries
-    ├── desktop/                    # i3, Alacritty (Linux desktop), zsh (all)
+    ├── desktop/                    # Sway/GNOME/i3, Alacritty (Linux desktop), zsh (all)
     ├── system/                     # firewall, kernel modules, services (Linux only)
     ├── distrobox/                  # Distrobox + Fedora container (RHEL CSB)
     └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal), task queue poller (systemd timer + script)
@@ -137,21 +150,18 @@ install_vpn: true           # mullvad (replaced expressvpn)
 2. `system` — firewall, kernel modules, sysctl, services
 
 *Play 2 — Host user (become: false, per-task escalation via `become: true` + tag `become`):*
-3. `common` — OS detection, profile setup, prerequisite dirs, **CSB detection** (sets `csb_restricted`, `fapolicyd_enforcing`, `sudo_unrestricted`, `needs_container_tier` facts — all run without root). Tagged `always` so it runs even with `--skip-tags become`. Must be in Play 2 so `make minimal` can access CSB facts.
-4. `packages` — all install methods (dnf, brew, binary, go, pip, npm). dnf tasks use per-task `become: true` tagged `become` — `make minimal` skips these via `--skip-tags become`
-5. `dotfiles` — config files (may reference installed binaries)
+3. `common` — OS/CSB detection, prerequisite dirs. Tagged `always` (runs even with `--skip-tags become`).
+4. `dotfiles` — config files (no dependency on packages — can run first for faster bootstrap)
+5. `packages` — dnf, brew, binary downloads, go install, pip, npm. Includes cloud CLIs (oc, kubectl, helm) and virtualization. Per-task `become: true` tagged `become`.
 6. `ssh` — keys from vault (needs dirs from common)
-7. `git_repos` — clone repos (needs gh from packages; clones via HTTPS, SSH only for push)
-8. `redhat` — CA certs, VPN (work profile, needs repos_dnf)
+7. `git_repos` — clone repos via HTTPS (needs gh auth; checks `gh auth status` before cloning)
+8. `redhat` — CA certs, VPN (work profile)
 9. `containers` — podman/docker config, registry auth
-10. `cloud_tools` — OpenShift/K8s/cloud CLI binaries
-11. `desktop` — Sway/GNOME/i3, Alacritty, zsh (needs packages)
-12. `distrobox_create` — create Toolbx/Distrobox container, register via `add_host` for Play 3
-13. `claude` — Claude Code install via native binary, instance config, task queue
+10. `desktop` — Sway/GNOME/i3, Alacritty, zsh
+11. `distrobox` — create Toolbx/Distrobox container + provision inside (Play 3 via `add_host`)
+12. `claude` — Claude Code install via native binary, instance config, task queue
 
-*Play 3 — Container (connection: containers.podman.podman, auto-skipped on Fedora):*
-14. `container_packages` — dnf packages inside the Fedora container
-15. `container_binaries` — oc, kubectl, grype, gh, Go tools inside the container
+11 roles total (merged cloud_tools + virtualization into packages, container_packages + container_binaries into distrobox).
 
 **Sudo handling:** Makefile passes `--ask-become-pass` for targets that need sudo. Alternatively, set `ansible_become_password` in vault and use `--become-password-file`.
 
@@ -186,9 +196,7 @@ lint:          ansible-lint && yamllint --strict .
 | `make desktop` | no | Sway/GNOME/i3 + shell + apps (auto-detects desktop env) |
 | `make system` | yes | Firewall, kernel, services |
 | `make redhat` | yes | CA certs and VPN |
-| `make cloud` | yes | Cloud CLIs |
 | `make containers` | no | Podman/Docker config, registry auth |
-| `make distrobox` | no | Distrobox + Fedora container |
 | `make claude` | no | Claude Code install + instance config |
 | `make smoke-test-host` | no | Host-level post-run verification |
 | `make smoke-test-container` | no | Container-level verification |
@@ -279,8 +287,7 @@ Key custom settings to preserve:
   # Remote Control (personal Mac)
   alias rc='claude --remote-control'
 
-  # Git push (YubiKey awareness)
-  gpush() { echo "YubiKey touch required..."; git push "$@"; }
+  # Git push — YubiKey blinks when touch needed (no wrapper — SSH FIDO2 prompt is sufficient)
 
   # Quick nav (supplement zoxide)
   alias src='cd ~/src'
@@ -441,17 +448,14 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 
 ### Secrets Management
 
-- **Ansible Vault**: AES-256-CTR, HMAC-SHA256 encrypt-then-MAC, PBKDF2 10k iterations. Three tiers:
-  - **Critical** (SSH keys, production creds): YubiKey HMAC-SHA1 on Slot 2 (`ykchalresp -2 "pin"` → 40-char hex). Program both keys identically (`ykman otp chalresp 2 <secret>`, generate with `openssl rand -hex 20`). Paper backup of hex secret in fireproof safe.
-  - **Infra** (registry tokens, API keys): KeePassXC on LUKS USB (master password + YubiKey Slot 1).
-  - **Dev** (env vars, non-sensitive config): Bitwarden (cloud, acceptable blast radius).
-  - **Vault password scripts** (preferred — passwords never touch disk):
+- **Ansible Vault**: AES-256-CTR, HMAC-SHA256 encrypt-then-MAC, PBKDF2 10k iterations. **Single vault** — one password derived from YubiKey HMAC-SHA1 on Slot 2 (`ykchalresp -2 "pin"` → 40-char hex). Program both keys identically (`ykman otp chalresp 2 <secret>`, generate with `openssl rand -hex 20`). Paper backup in fireproof safe + bank safe deposit box. Recovery codes in KeePassXC on LUKS USB (Slot 1).
+  - **Vault password script** (preferred — password never touches disk):
     ```bash
-    # scripts/vault-pass-critical.sh (mode 0700)
+    # scripts/vault-pass.sh (mode 0700)
     #!/bin/bash
     ykchalresp -2 "your-memorized-pin" 2>/dev/null
     ```
-    Ansible runs executable scripts and captures stdout. Fallback: password files at `~/.vault_pass_*` (mode 0600). Note: all files in `vault_identity_list` must exist or Ansible errors globally.
+    Fallback: password file at `~/.vault_pass` (mode 0600) for first-run bootstrap before `ykpers` is installed.
 - **Vault conventions**: `vault_` prefix on all secret vars, referenced from plaintext vars (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every vault task (CVE-2024-8775: `--check --diff` leaks decrypted content). Debug toggle: `no_log: "{{ not (ansible_debug_mode | default(false) | bool) }}"`.
 - **Vault rotation**: `ansible-vault rekey --vault-id critical@old --new-vault-id critical@new <files>`. **Commit before rekeying** — rekey is not atomic (interruption = data loss). Inline `encrypt_string` values cannot be rekeyed; prefer file-level encryption.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600.
