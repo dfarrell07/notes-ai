@@ -67,7 +67,7 @@ roles_path = ./roles
 # default.config.yml (Geerling pattern — shipped defaults)
 profile: work              # override in config.yml (gitignored)
 install_docker: false       # per-feature booleans
-install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
+install_vpn: true           # mullvad (replaced expressvpn)
 
 # Profile gating pattern in roles:
 # roles/redhat/tasks/main.yml
@@ -332,7 +332,7 @@ Full repo list must be populated in `repos.yml` during implementation phase 4. C
 
 ### Third-Party RPM Repos (dnf-based OS only)
 
-acli, docker-ce, mullvad/protonvpn, gh-cli, google-chrome, google-cloud-sdk, rpmfusion (free + nonfree + nvidia + steam), slack, redhat. Each gated by a boolean with per-OS defaults.
+acli, docker-ce, mullvad, gh-cli, google-chrome, google-cloud-sdk, rpmfusion (free + nonfree + nvidia + steam), slack, redhat. Each gated by a boolean with per-OS defaults.
 
 ### System (become: true, Linux only)
 
@@ -358,7 +358,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **X11 → Sway migration** (future, 2026 is the right window): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. i3 cannot run under XWayland — requires full Xorg session. Fedora is removing X11 sessions (GNOME X11 already dropped). Sway config reuses ~95% of i3 config (change `xrandr` → `sway output`, `feh` → `output bg`, `scrot` → `grim`+`slurp`). Claude Code sandbox works fine on Wayland. Start with dual i3+Sway setup.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
 - **dnf-automatic**: `dnf5 install dnf5-plugin-automatic`, enable `dnf5-automatic.timer`. Config at `/etc/dnf/automatic.conf`: `apply_updates=yes`, `upgrade_type=default` in `[commands]` section. Exclude third-party repos from auto-updates by setting `enabled=0` in their `.repo` files (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update manually with `dnf5 upgrade --enablerepo=<name>`.
-- **Services**: libvirtd, dkms, mullvad/protonvpn (gated), fail2ban (only if SSH is publicly exposed). Docker disabled by default (start on demand).
+- **Services**: libvirtd, dkms, mullvad (gated), fail2ban (only if SSH is publicly exposed). Docker disabled by default (start on demand).
 - **CUPS**: disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain (GTK/Qt/Chromium dependency). If cupsd is kept, verify it listens only on localhost.
 - **Virtualization**: libvirt, qemu-kvm
 
@@ -427,7 +427,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets (critical: without this, `--check --diff` leaks decrypted vault content to terminal scrollback, tmux history, and Claude Code transcripts).
 - **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600.
-- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks protect --staged`) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Additional `commit-msg` hook rejects messages containing internal domain patterns (prevents AI-generated commits from leaking infrastructure names). Both deployed as git template hooks (`git config --global init.templateDir ~/.config/git/template`).
+- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks git --pre-commit --staged --redact`, in Fedora repos) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Additional `commit-msg` hook rejects messages containing internal domain patterns (prevents AI-generated commits from leaking infrastructure names). Both deployed as git template hooks (`git config --global init.templateDir ~/.config/git/template`).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
 ### Network
@@ -636,7 +636,7 @@ RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation i
 - **Podman rootless** — ships with RHEL, Red Hat supported. Needs one-time admin setup of `/etc/subuid` and `/etc/subgid`
 - **Distrobox** — installs to `~/.local/bin/`, uses rootless Podman. Potential blocker: fapolicyd may block scripts in `~/.local/bin/`. Red Hat's official alternative is Toolbx.
 - **SSH server** — STIG allows but heavily restricts (key-only, restricted ciphers, logging)
-- **SELinux** — enforcing with targeted policy, mandatory. Affects container volume mounts (use `:z` flag)
+- **SELinux** — enforcing with targeted policy, mandatory. Affects container volume mounts (use `:Z` for private label, `:z` for shared)
 - **LUKS encryption** — CSB ships with full-disk encryption
 
 **Uncertain (needs IT verification):**
@@ -675,7 +675,7 @@ See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 
 - **Primary role**: portable thin client for steering Claude Code remotely + Claude app for voice/connectors
 - **Remote Control**: `claude.ai/code` in Safari → steer Mac desktop sessions. Pro plan, full features.
-- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. **YubiKey limitation**: Blink Shell supports ecdsa-sk but NOT ed25519-sk keys. Generate a separate ecdsa-sk key for iPad SSH auth, or use Termius ($10/mo, supports both key types).
+- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. **YubiKey limitation**: Blink Shell supports ecdsa-sk but NOT ed25519-sk keys. Preferred workaround: use Tailscale SSH (auth at network layer, no SSH key needed on iPad). Fallback: generate a separate ecdsa-sk key for iPad, or use Termius ($10/mo, supports ed25519-sk).
 - **Claude app**: work account (managed, Jira/GitHub connectors) + personal account (full connectors, voice mode)
 - **GitHub app**: issue creation, PR review (same as phone but better with keyboard + larger screen)
 - **Dispatch**: send tasks from Claude iOS app to Mac Desktop app
@@ -916,7 +916,7 @@ repo: submariner-operator
 
 The task queue executor uses bare Podman with strict isolation:
 ```
-podman run --rm --network=slirp4netns --read-only \
+podman run --rm --read-only \
   --tmpfs /tmp:size=100m --tmpfs /home/claude:size=50m \
   --memory=4g --cpus=2 --pids-limit=256 \
   --cap-drop=ALL --security-opt=no-new-privileges \
@@ -926,7 +926,7 @@ podman run --rm --network=slirp4netns --read-only \
 ```
 - Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds
 - API key: use `podman secret create` or `--env-file` with mode 0600 — NOT `-e ANTHROPIC_API_KEY` (visible in `/proc/<pid>/cmdline` to any local process)
-- Network: `slirp4netns` (Podman default for rootless). Primary defense is filesystem isolation, not network.
+- Network: pasta (Podman 5.x default for rootless — slirp4netns not installed by default on Fedora 42). Primary defense is filesystem isolation, not network.
 - Repo-scoped deploy key as sole credential (not user's gh auth)
 - Separate PAT for poller (reads issues) vs executor (pushes code)
 - Container destroyed after each task
