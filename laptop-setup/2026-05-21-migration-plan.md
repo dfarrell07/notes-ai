@@ -19,8 +19,8 @@ Two dimensions control what gets installed:
 - **Alacritty** — replaces urxvt. GPU-accelerated, TOML config, Dracula theme, in Fedora repos. Alternative: Kitty (also in Fedora repos, adds ligatures + image protocol + SSH kitten)
 - **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation. **Watch**: 2026 leadership changes (PE/M&A CEO, dropped "Transparency" value, briefly removed "Always free" language) mirror LastPass/LogMeIn trajectory. Monitor; KeePassXC + Proton Pass are fallback options.
 - **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
-- **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
-- **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
+- **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678 (ECDSA side-channel — ed25519-sk keys are NOT affected; firmware cannot be updated).
+- **Mullvad** (preferred over ProtonVPN) — replaces ExpressVPN. Mullvad has official Tailscale integration (exit nodes in tailnet), mature Linux CLI (Rust), WireGuard-only since Jan 2026, RAM-only servers, police-raid-tested no-logs. ProtonVPN is a solid alternative but has no Tailscale integration (manual workarounds), a newer/less mature Linux CLI, and renewal pricing traps. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
 - **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (Apache 2.0 licensed but closed-development, no public repo — required for GCP)
 - **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533 patched in 2026.4.5 but not in Fedora repos — Ansible handles the use case), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
 
@@ -113,7 +113,7 @@ install_vpn: true           # mullvad or protonvpn (replaced expressvpn)
 │   ├── vault_infra.yml             # ansible-vault --encrypt-vault-id infra: registry tokens, API keys
 │   └── vault_dev.yml               # ansible-vault --encrypt-vault-id dev: env vars, non-sensitive config
 └── roles/
-    ├── common/                     # OS detection, profile setup, dirs (~/.ssh/sockets, ~/.config/git/template/hooks, etc.), prerequisites
+    ├── common/                     # OS detection, profile setup, dirs (/run/user/$UID/ssh, ~/.config/git/template/hooks, etc.), prerequisites
     ├── repos_dnf/                  # third-party RPM repos (dnf-based OS only)
     ├── packages/                   # dnf, brew, binary download, go install, pip, npm, curl (see Packages section for full list)
     │   #   versions pinned in variables, ALL binary downloads SHA256-verified
@@ -245,7 +245,7 @@ Key custom settings to preserve:
       echo "ERROR: Work directory detected. Use 'cw' for work repos."; return 1
     fi
     local s="personal-${PWD##*/}"
-    tmux new-session -As "$s" "CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
+    tmux new-session -As "$s" "unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION; CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
   }
   cls() { tmux list-sessions 2>/dev/null | grep -E "work-|personal-"; }
   ca() { tmux attach -t "$(tmux list-sessions -F '#{session_name}' | grep -E 'work-|personal-' | head -1)"; }
@@ -371,7 +371,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 
 **Instance isolation (work laptop):**
 
-Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. Use direnv `.envrc` per project for auto-switching — explicitly `unset` the other context's vars. Never run both in the same working directory. Known bugs: session cross-contamination (#27658), branch swapping (#60295).
+Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. The `cw()`/`ccp()` wrappers are the primary isolation mechanism (not direnv — env vars are read once at startup, not updated mid-session). Never run both in the same working directory. Known bugs: session cross-contamination (#27658), branch swapping (#60295).
 
 **Claude Code global config (both instances):**
 
@@ -444,7 +444,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Post-quantum SSH**: Fedora crypto-policies block PQ KEX by default. Fix: `sudo update-crypto-policies --set DEFAULT:TEST-PQ` or add `KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256` to `~/.ssh/config`. Verify: `ssh -vT git@github.com 2>&1 | grep kex` should show `sntrup761`. Protects session data from "harvest now, decrypt later" attacks. PQ identity keys (ML-DSA) not yet available in production OpenSSH.
 - **Non-default port**: noise reduction (eliminates automated bot traffic), not a security control. Keep below 1024 (privileged) to prevent local attackers from binding if sshd is down.
 - **fail2ban**: only if SSH is publicly exposed (see Services). Behind Tailscale with FIDO2, it generates zero bans.
-- **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 keys vulnerable to EUCLEAK CVE-2024-45678). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
+- **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 vulnerable to EUCLEAK CVE-2024-45678, ECDSA only — ed25519-sk not affected). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
 - **Backup YubiKey**: separate key enrolled on a second YubiKey, stored securely. Prevents lockout if primary is lost/damaged.
 - **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644. Deploy pre-seeded `known_hosts` with verified fingerprints for github.com and internal git servers (avoids TOFU, prevents leaking internal hostnames). Set `HashKnownHosts yes` in ssh config.
 - **GNOME Keyring conflict**: GNOME Keyring's SSH agent does not support FIDO2 keys — breaks signing and auth. Disable by removing `/etc/xdg/autostart/gnome-keyring-ssh.desktop` (or `mkdir -p ~/.config/autostart && cp /etc/xdg/autostart/gnome-keyring-ssh.desktop ~/.config/autostart/ && echo Hidden=true >> ~/.config/autostart/gnome-keyring-ssh.desktop`). Use OpenSSH's ssh-agent instead. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
@@ -689,7 +689,7 @@ See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 - **Local Claude Code**: install in Crostini (`npm install -g @anthropic-ai/claude-code`) with Anthropic Pro for light personal work. 8GB RAM limits heavy use.
 - **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use GPG/PIV workaround or Tailscale SSH (avoids key management).
 - **Browser-based dev**: GitHub Codespaces, code-server for VS Code workflows
-- **Keep ChromeOS** — full Linux install not worth the trade-offs on Pixelbook Go (2019, 8GB). **Confirm Developer Mode is disabled** (Crostini doesn't require it). AUE June 2028 — plan migration. **If AUE has already passed or is imminent, remove from Tailscale mesh** — unpatched device on trusted network is a lateral movement risk. Replace or use as untrusted web-only kiosk.
+- **Keep ChromeOS** — full Linux install not worth the trade-offs on Pixelbook Go (2019, 8GB). **Confirm Developer Mode is disabled** (Crostini doesn't require it). AUE June 2029 (extended under Google's 10-year policy; verify in Settings → About ChromeOS → Update schedule). Extended updates remove Android app support. **If AUE has already passed or is imminent, remove from Tailscale mesh** — unpatched device on trusted network is a lateral movement risk. Replace or use as untrusted web-only kiosk.
 
 ### Tailscale Mesh
 
