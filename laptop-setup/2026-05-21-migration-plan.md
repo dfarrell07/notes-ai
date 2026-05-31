@@ -212,7 +212,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
-- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock (screen lock daemon — xautolock unmaintained, xidlehook unmaintained/dev passed away 2021, both dropped). For Sway: swayidle + swaylock
+- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock. For Sway: swayidle + swaylock
 - **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox)
 
 ### Dotfiles
@@ -363,7 +363,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 
 **Instance isolation (work laptop):**
 
-Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. Use direnv `.envrc` per project for auto-switching — explicitly `unset` the other context's vars. Never run both in the same working directory.
+Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account). Use the `cw`/`ccp` shell aliases (defined in zshrc section) which wrap Claude in tmux with the correct env vars per instance. Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value. Use direnv `.envrc` per project for auto-switching — explicitly `unset` the other context's vars. Never run both in the same working directory. Known bugs: session cross-contamination (#27658), branch swapping (#60295).
 
 **Claude Code global config (both instances):**
 
@@ -523,10 +523,7 @@ Mitigations:
 
 ### Claude Code Security
 
-**Instance isolation:**
-- Never set `CLAUDE_CODE_USE_VERTEX` globally — checks presence, not value. Must be completely unset for personal instance.
-- Separate `CLAUDE_CONFIG_DIR` prevents credential, MCP server, and session history leakage between contexts.
-- Known bugs: session cross-contamination in same directory (#27658), branch swapping (#60295). Never run both instances in the same working directory.
+**Instance isolation:** See Claude Code Configuration section. Key additions for security:
 - `~/.claude.json` is shared regardless of config dir — low-impact but avoid simultaneous runs when possible.
 
 **Repo trust (cloned repos can attack Claude Code):**
@@ -594,7 +591,7 @@ Items that only apply to macOS (personal Mac desktop):
 
 **Brew autoupdate:** `brew tap domt4/autoupdate && brew autoupdate start 43200 --upgrade --cleanup` — equivalent of dnf-automatic.
 
-**Registry credential helper:** `docker-credential-osxkeychain` instead of `docker-credential-secretservice`.
+**Registry credential helper:** `docker-credential-osxkeychain` (via Homebrew, with `credHelpers` in auth.json).
 
 **Manual (cannot automate):** TCC permissions — Accessibility (AeroSpace), Full Disk Access (terminal), App Management (brew autoupdate). Requires GUI interaction.
 
