@@ -223,7 +223,9 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 **macOS:** aerospace.toml (i3-like tiling WM), macOS defaults (keyboard repeat, smart quotes off, Finder, Dock)
 
 Key custom settings to preserve:
-- **zshrc**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, `zstyle ':omz:update' mode disabled` (must appear before `source $ZSH/oh-my-zsh.sh` — auto-update conflicts with Ansible-managed config). Remove: `github` plugin, `command-not-found` (biggest startup slowdown — adds 200-300ms), `gnu-utils` (no-op on Linux, only useful on macOS), Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases. **Future**: consider Starship prompt (5-15ms render vs gallois 50-200ms, Rust, cross-shell) as hybrid replacement — set `ZSH_THEME=""` and add `eval "$(starship init zsh)"` after oh-my-zsh source.
+- **zshrc (keep)**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, `zstyle ':omz:update' mode disabled` (must appear before `source $ZSH/oh-my-zsh.sh` — auto-update conflicts with Ansible-managed config).
+- **zshrc (remove)**: `github` plugin, `command-not-found` (biggest startup slowdown — 200-300ms), `gnu-utils` (no-op on Linux), Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
+- **zshrc (future)**: Starship prompt as hybrid replacement (5-15ms render vs gallois 50-200ms, Rust, cross-shell). Set `ZSH_THEME=""` and add `eval "$(starship init zsh)"` after oh-my-zsh source.
 
   **Shell aliases and functions:**
   ```bash
@@ -285,7 +287,10 @@ Key custom settings to preserve:
   alias pingg="ping www.google.com"
   alias ping8="ping 8.8.8.8"
   ```
-- **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, `push.default=simple`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional). `pushInsteadOf` to route pushes over SSH (YubiKey touch required) while pulls stay HTTPS (no touch). SSH commit signing enabled (`gpg.format=ssh`, `commit.gpgsign=true`) using a no-touch YubiKey key — Claude Code signs commits automatically (YubiKey plugged in, no tap), pushing still requires tap. Conditional includes for per-directory email: `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email. Prevents committing with wrong identity.
+- **gitconfig**: `logg` alias, meld difftool, `autocorrect=1`, gh credential helper, Red Hat CA cert paths (work profile only, template conditional).
+  - `pushInsteadOf` routes pushes over SSH (YubiKey touch) while pulls stay HTTPS (no touch).
+  - SSH commit signing (`gpg.format=ssh`, `commit.gpgsign=true`) using no-touch YubiKey key — Claude Code signs automatically, pushing still requires tap.
+  - `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email.
 - **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste, `monitor-activity on`, `visual-activity on` (alerts when background Claude sessions produce output).
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
@@ -428,7 +433,9 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 ### Network
 
 - **Firewall**: `public` zone, not FedoraWorkstation (which opens 1025-65535). Default-DROP policy. Allow only SSH (non-default port) + specific dev ports as needed. Allow essential ICMP (destination-unreachable, time-exceeded, echo-reply) — full stealth breaks Path MTU Discovery.
-- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. Enable **Tailnet Lock** (free on Personal plan) — prevents rogue node injection even if Tailscale's coordination server is compromised. DERP relays are end-to-end encrypted. Note: Tailnet Lock does NOT protect DNS mappings — a compromised coordination server can spoof MagicDNS. Fix: `tailscale set --accept-dns=false`, configure split DNS manually (only `*.ts.net` → 100.100.100.100, everything else → Cloudflare DoT). MagicDNS conflicts with `DNSOverTLS=yes` if both claim the default DNS route.
+- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. DERP relays are end-to-end encrypted.
+  - **Tailnet Lock** (free on Personal plan, GA): prevents rogue node injection even if coordination server is compromised. Does NOT protect DNS mappings — a compromised server can spoof MagicDNS.
+  - **MagicDNS fix**: `tailscale set --accept-dns=false`, configure split DNS manually (`*.ts.net` → 100.100.100.100, everything else → Cloudflare DoT). MagicDNS conflicts with `DNSOverTLS=yes` if both claim the default DNS route.
 - **VPN isolation**: never run personal VPN (Mullvad/ProtonVPN) and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
 
 ### SSH
