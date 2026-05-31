@@ -211,7 +211,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 
 **Work profile:**
 - **Red Hat:** redhat-internal-cert-install, redhat-internal-openvpn-profiles, acli
-- **Containers:** podman, buildah, skopeo. Docker optional (Fedora-only, rootless mode, NOT docker group)
+- **Containers:** podman, buildah, skopeo. Docker optional (not on RHEL CSB — third-party repo blocked; rootless mode only, NOT docker group)
 
 **Linux desktop (any profile):**
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
@@ -346,7 +346,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **BIOS hardening** (ThinkPad): set Supervisor Password, disable USB/PXE boot, set Thunderbolt security to "Secure Connect" (`boltctl` manages runtime authorization), disable Intel AMT if unused. Without BIOS password, physical access bypasses Secure Boot.
-- **USBGuard**: deploy on Fedora (not just CSB). Whitelist YubiKey (`1050:0407` — OTP+U2F+CCID default mode), Moonlander (`3297:1969`), and Moonlander DFU bootloader (`0483:df11` — needed for firmware flashing). Block all other USB devices by default. `usbguard generate-policy` for initial setup.
+- **USBGuard**: deploy on all Linux machines (CSB may already have it via STIG). Whitelist YubiKey (`1050:0407` — OTP+U2F+CCID default mode), Moonlander (`3297:1969`), and Moonlander DFU bootloader (`0483:df11` — needed for firmware flashing). Block all other USB devices by default. `usbguard generate-policy` for initial setup.
 - **Kernel module**: blacklist intel_vbtn if non-convertible ThinkPad has false tablet-mode bug (keyboard/touchpad disabled at boot). Kernel 6.19 has improved DMI filtering — test before adding.
 - **Sysctl hardening**: `kernel.yama.ptrace_scope=1`, `kernel.kptr_restrict=1`, `kernel.io_uring_disabled=1` (unprivileged only; value 2 = ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1`.
 - **Secure Boot**: enable in BIOS. Required before kernel lockdown (`lockdown=integrity`).
@@ -441,7 +441,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. DERP relays are end-to-end encrypted.
   - **Tailnet Lock** (free on Personal plan, GA): prevents rogue node injection even if coordination server is compromised. Does NOT protect DNS mappings — a compromised server can spoof MagicDNS.
   - **MagicDNS fix**: `tailscale set --accept-dns=false`, configure split DNS manually (`*.ts.net` → 100.100.100.100, everything else → Cloudflare DoT). MagicDNS conflicts with `DNSOverTLS=yes` if both claim the default DNS route.
-- **VPN isolation**: never run personal VPN (Mullvad/ProtonVPN) and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
+- **VPN isolation**: never run Mullvad and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
 
 ### SSH
 
@@ -629,7 +629,7 @@ A malicious extension with `<all_urls>` + `cookies` permissions can steal sessio
 RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation image. Exact hardening profile unknown publicly, but if STIG-based these restrictions apply:
 
 **Likely blocked without IT exception:**
-- **Third-party repos** (Tailscale, Mullvad/ProtonVPN, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
+- **Third-party repos** (Tailscale, Mullvad, Docker CE) — STIG prohibits non-Red Hat repos including EPEL
 - **Homebrew/Linuxbrew** — installs outside RPM trust database, blocked by fapolicyd if enforcing
 - **pip --user, go install, npm global** — binaries in ~/ paths blocked by fapolicyd (deny-all, permit-by-exception for RPM-trusted paths)
 - **Custom firewall rules** — STIG requires drop zone, admin-managed
@@ -1067,7 +1067,7 @@ ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
 - Register both YubiKeys as passkeys on: GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian
 - `gh auth login`
 - Chrome sign-in (bookmarks/extensions)
-- Mullvad or ProtonVPN setup
+- Mullvad VPN setup
 
 **Work profile:**
 - `oc login --web` to Konflux cluster (name in CLAUDE.local.md)
