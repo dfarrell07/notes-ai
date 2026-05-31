@@ -213,7 +213,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
 - **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock (screen lock daemon — xautolock unmaintained, xidlehook unmaintained/dev passed away 2021, both dropped). For Sway: swayidle + swaylock
-- **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox), docker-credential-secretservice
+- **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox)
 
 ### Dotfiles
 
@@ -433,7 +433,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Server hardening** (`/etc/ssh/sshd_config`): `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`, `MaxAuthTries 3`, `LoginGraceTime 30`, `AllowUsers <username>`, `X11Forwarding no`, `AllowAgentForwarding no`, `AllowTcpForwarding no`, `ClientAliveInterval 300`, `ClientAliveCountMax 2`.
 - **Post-quantum SSH**: Fedora crypto-policies block PQ KEX by default. Fix: `sudo update-crypto-policies --set DEFAULT:TEST-PQ` or add `KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256` to `~/.ssh/config`. Verify: `ssh -vT git@github.com 2>&1 | grep kex` should show `sntrup761`. Protects session data from "harvest now, decrypt later" attacks. PQ identity keys (ML-DSA) not yet available in production OpenSSH.
 - **Non-default port**: noise reduction (eliminates automated bot traffic), not a security control. Keep below 1024 (privileged) to prevent local attackers from binding if sshd is down.
-- **fail2ban**: installed and enabled. Reduces log noise, catches misconfigured scanners.
+- **fail2ban**: only if SSH is publicly exposed (see Services). Behind Tailscale with FIDO2, it generates zero bans.
 - **YubiKey FIDO2**: YubiKey 5C NFC with firmware 5.7+ (pre-5.7 keys vulnerable to EUCLEAK CVE-2024-45678). Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. 100 resident key slots. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk).
 - **Backup YubiKey**: separate key enrolled on a second YubiKey, stored securely. Prevents lockout if primary is lost/damaged.
 - **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644. Deploy pre-seeded `known_hosts` with verified fingerprints for github.com and internal git servers (avoids TOFU, prevents leaking internal hostnames). Set `HashKnownHosts yes` in ssh config.
@@ -965,7 +965,7 @@ Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Ve
 1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
 2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
 3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev` → `bw lock && unset BW_SESSION` after retrieval
-4. `make all` decrypts each vault tier. The skill's post-run phase auto-shreds vault password files (`shred -u ~/.vault_pass_*`). Alternative: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
+4. `make all` decrypts each vault tier. The skill's post-run phase removes vault password files (`rm ~/.vault_pass_*` — shred is unreliable on btrfs/SSDs, FDE is the at-rest protection). Better: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
 
 **Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
 
