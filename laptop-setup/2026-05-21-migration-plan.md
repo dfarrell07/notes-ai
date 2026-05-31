@@ -21,7 +21,7 @@ Two dimensions control what gets installed:
 - **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
 - **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678.
 - **Mullvad or ProtonVPN** — replaces ExpressVPN. ExpressVPN's parent Kape Technologies has adware origins (Crossrider), went fully private in 2023 (zero public oversight), employed a UAE offensive hacker as CIO. Mullvad: no email signup, police-raid-tested, WireGuard-only. ProtonVPN: open source clients, Swiss jurisdiction. Either is a trust upgrade.
-- **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (source-available, no public repo — required for GCP)
+- **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (Apache 2.0 licensed but closed-development, no public repo — required for GCP)
 - **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533 patched in 2026.4.5 but not in Fedora repos — Ansible handles the use case), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), LastPass (breached, actively exploited), 1Password (closed source), ExpressVPN (Kape ownership, ex-adware, closed source client, went private), gemini-cli (Google killing free API June 2026)
 
 ## Architecture: Ansible + Claude Code Skill
@@ -212,7 +212,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
-- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock or xidlehook (screen lock timer — xautolock is unmaintained, dropped)
+- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock (screen lock daemon — xautolock unmaintained, xidlehook unmaintained/dev passed away 2021, both dropped). For Sway: swayidle + swaylock
 - **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox), docker-credential-secretservice
 
 ### Dotfiles
@@ -290,8 +290,8 @@ Key custom settings to preserve:
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
-- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), internal git servers (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath ~/.ssh/sockets/%r@%h-%p`, `ControlPersist 60` — one YubiKey tap opens a 60-second multiplexed session (shorter than 600s to limit socket hijack window). `~/.ssh/sockets/` mode 0700.
-- **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xss-lock or xidlehook). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
+- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), internal git servers (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath /run/user/%i/ssh/%r@%h-%p`, `ControlPersist 60` — one YubiKey tap opens a 60-second multiplexed session (shorter than 600s to limit socket hijack window). Uses `/run/user/` instead of `~/.ssh/sockets/` to prevent Distrobox containers from accessing sockets via shared home directory. Create dir with mode 0700 via dotfiles role.
+- **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xss-lock). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately). Note: current config says `git_protocol: ssh` — must change to `https` during setup.
 - **gh hosts.yml**: `github.com`, user `dfarrell07`, `git_protocol: https`.
 
@@ -351,7 +351,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **X11 → Sway migration** (future, 2026 is the right window): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. i3 cannot run under XWayland — requires full Xorg session. Fedora is removing X11 sessions (GNOME X11 already dropped). Sway config reuses ~95% of i3 config (change `xrandr` → `sway output`, `feh` → `output bg`, `scrot` → `grim`+`slurp`). Claude Code sandbox works fine on Wayland. Start with dual i3+Sway setup.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
 - **dnf-automatic**: `dnf5 install dnf5-plugin-automatic`, enable `dnf5-automatic.timer`. Config at `/etc/dnf/automatic.conf`: `apply_updates=yes`, `upgrade_type=default` in `[commands]` section. Exclude third-party repos from auto-updates by setting `enabled=0` in their `.repo` files (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update manually with `dnf5 upgrade --enablerepo=<name>`.
-- **Services**: fail2ban, libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). CUPS removed (September 2024 RCE, not needed if not printing; if kept: disable cups-browsed, restrict cupsd to localhost).
+- **Services**: fail2ban, libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). Disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain — GTK, Qt, Chromium, and all Electron apps depend on it. If cupsd is kept, verify it listens only on localhost.
 - **Virtualization**: libvirt, qemu-kvm
 
 ### User Environment (become: false)
@@ -510,7 +510,7 @@ Mitigations:
 - GitHub Issues as task queue: phone can create issues but cannot execute anything on laptop directly.
 - If phone is extracted (Cellebrite, border search): attacker gets GitHub token, can create issues. Mitigated by `--allowedTools` whitelist on laptop's task processor + PRs require human review + container isolation.
 - Strong lockscreen PIN (not biometric alone — biometric can be compelled in some jurisdictions).
-- **Pixel hardening**: enable Advanced Protection Mode (Android 16, one toggle — hardware USB blocking, auto-reboot 72h, blocks sideloading). Use Work Profile via Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile). Lockdown Mode (long-press Power → Lockdown) before border crossings — disables biometrics, forces PIN. Set USB default to "No data transfer."
+- **Pixel hardening**: enable Advanced Protection Mode (Android 16, one toggle — hardware USB blocking, auto-reboot 72h, blocks sideloading). Lockdown Mode (long-press Power → Lockdown) before border crossings — disables biometrics, forces PIN. Set USB default to "No data transfer." **Work Profile isolation**: use Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile) — but **install Shelter before enabling APM** (APM blocks sideloading/F-Droid). **Cannot use Shelter if Red Hat MDM is enrolled** (Android allows only one work profile). If MDM is on this device, skip Shelter and use MDM's work profile or a separate device.
 - **GrapheneOS** (optional, for frequent travelers): 18h auto-reboot (vs 72h stock), duress PIN (silent factory reset), stronger USB blocking. Compatible with GitHub Mobile, Claude app via Sandboxed Google Play.
 
 ### Travel
@@ -651,7 +651,7 @@ Container setup via `distrobox.ini` (Ansible generates from Jinja2 template, run
 - Packages via `additional_packages`: Go, Python 3, gcc, clang, vim, zsh, jq, tmux, direnv, fzf, zoxide, shellcheck, shfmt, yamllint, Node.js
 - Binary downloads via `init_hooks`: oc, kubectl, kind, kustomize, helm, opm, subctl, gh, golangci-lint, grype, yq, Claude Code
 - Container commands (podman, buildah, skopeo) delegate to host via `distrobox-host-exec` symlinks — no nested containers
-- kind works: binary in container calls host's Podman to create cluster nodes
+- kind works: binary in container calls host's Podman to create cluster nodes. **Host prerequisites**: `log_driver = "k8s-file"` in `~/.config/containers/containers.conf` (critical — default log driver causes timeout), load iptables kernel modules (`ip6_tables`, `ip6table_nat`, `ip_tables`, `iptable_nat`), increase `pids_limit`. `KIND_EXPERIMENTAL_PROVIDER=podman` if Docker also installed.
 
 Shared with host (Distrobox default): home directory, display, network. All dotfiles, SSH keys, Claude Code config, oh-my-zsh work automatically.
 
