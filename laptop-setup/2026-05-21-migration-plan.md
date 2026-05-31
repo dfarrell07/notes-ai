@@ -21,13 +21,13 @@ Two dimensions control what gets installed:
 
 - **Ansible** — one tool for packages, dotfiles, services, secrets
 - **Distrobox** — run Fedora tools on RHEL CSB without root
-- **Alacritty** — replaces urxvt. GPU-accelerated, TOML config, Dracula theme, in Fedora repos. Alternative: Kitty (also in Fedora repos, adds ligatures + image protocol + SSH kitten)
-- **Bitwarden** — replaces LastPass (actively exploited stolen vaults, $438M+ losses). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation. **Watch**: 2026 leadership changes (PE/M&A CEO, dropped "Transparency" value, briefly removed "Always free" language) mirror LastPass/LogMeIn trajectory. Monitor; KeePassXC + Proton Pass are fallback options.
+- **Alacritty** — replaces urxvt. GPU-accelerated, TOML config (YAML deprecated), Dracula theme, in Fedora repos. No ligatures (permanent design stance). Alternatives: Kitty (ligatures + image protocol + SSH kitten), Ghostty (Dec 2024, Zig, by Mitchell Hashimoto — matches Alacritty speed with built-in tabs/splits/ligatures, COPR-only on Fedora)
+- **Bitwarden** — replaces LastPass (actively exploited stolen vaults, estimated $435M+ in aggregate cryptocurrency losses across multiple researchers' tallies). Open source, self-hostable via Vaultwarden, YubiKey FIDO2 on free tier, CLI for automation. **Watch**: 2026 leadership changes (PE/M&A CEO, dropped "Transparency" value, briefly removed "Always free" language) mirror LastPass/LogMeIn trajectory. Monitor; KeePassXC + Proton Pass are fallback options.
 - **KeePassXC** — offline vault for highest-value secrets (recovery codes, vault password, backup keys). Local-only, never touches cloud. YubiKey challenge-response.
 - **YubiKey 5C NFC (firmware 5.7+)** — already have two (purchased Nov 2025, likely 5.7+, verify with `ykman info`). 100 resident key slots, native Ed25519, USB-C + NFC for Pixel. Pre-5.7 keys are vulnerable to EUCLEAK CVE-2024-45678 (ECDSA side-channel — ed25519-sk keys are NOT affected; firmware cannot be updated).
-- **Mullvad** — replaces ExpressVPN (Kape Technologies: adware origins, went fully private 2023, UAE offensive hacker as CIO). Mullvad: official Tailscale integration (exit nodes in tailnet), mature Linux CLI (Rust), WireGuard-only since Jan 2026, RAM-only servers, no email signup, police-raid-tested no-logs, EUR 5/mo flat. ProtonVPN is a solid alternative (open source, Swiss) but has no Tailscale integration and renewal pricing traps.
+- **Mullvad** — replaces ExpressVPN (Kape Technologies: adware origins via Crossrider, went fully private 2023, former CTO Daniel Gericke built UAE Project Raven surveillance tools — fined by US DOJ). Mullvad: official Tailscale integration (exit nodes in tailnet), mature Linux CLI (Rust), WireGuard-only since Jan 2026, RAM-only servers, no email signup, police-raid-tested no-logs, EUR 5/mo flat. ProtonVPN is a solid alternative (open source, Swiss) but has no Tailscale integration and standard industry intro-then-renewal pricing (not traps per se — Proton is more transparent than most competitors).
 - **Proprietary tools (accepted)**: Claude Code (source-available, Anthropic Commercial ToS — no open alternative with equivalent capability), acli (Appfire EULA — Atlassian MCP server used as complement, but acli still needed for some workflows), gcloud CLI (Apache 2.0 licensed but closed-development, no public repo — required for GCP)
-- **Rejected**: chezmoi (marginal over ansible-vault), mise (CVE-2026-35533 patched in 2026.4.5 but not in Fedora repos — Ansible handles the use case), GNU Stow (no templating), yadm (no advantage), Nix (no RHEL support), Devbox (needs /nix), 1Password (closed source), gemini-cli (Google killing free API June 2026)
+- **Rejected**: chezmoi (redundant when Ansible handles dotfile templating), mise (CVE-2026-35533 affects through 2026.4.5, fixed in 2026.4.6+ — not in official Fedora repos, available via COPR), GNU Stow (no templating), yadm (no advantage given Ansible), Nix (works on RHEL but with SELinux/SSL friction, not Red Hat supported), Devbox (needs /nix), 1Password (core is proprietary, ecosystem MIT-licensed), gemini-cli (Google killing free API June 18, 2026)
 
 ## Architecture: Ansible + Claude Code Skill
 
@@ -64,10 +64,16 @@ Run the full provisioning workflow:
 # ansible.cfg
 [defaults]
 become = false
-vault_identity_list = critical@~/.vault_pass_critical, infra@~/.vault_pass_infra, dev@~/.vault_pass_dev
+vault_identity_list = critical@scripts/vault-pass-critical.sh, infra@scripts/vault-pass-infra.sh, dev@scripts/vault-pass-dev.sh
+default_vault_id_match = true
 stdout_callback = yaml
+display_args_to_stdout = false
 collections_paths = ./collections
 roles_path = ./roles
+pipelining = true
+
+[privilege_escalation]
+become_exe = /usr/bin/sudo
 
 # default.config.yml (Geerling pattern — shipped defaults)
 profile: work              # override in config.yml (gitignored)
@@ -96,7 +102,10 @@ install_vpn: true           # mullvad (replaced expressvpn)
 ├── CLAUDE.md                       # Project-level instructions for Claude Code
 ├── .claude/
 │   ├── skills/
-│   │   └── setup.md                # Main setup skill (pre-flight → ansible → review → auth → verify)
+│   │   └── setup/
+│   │       ├── SKILL.md            # 7-phase workflow: preflight → detect → run roles → auth → smoke → CSB report → summary
+│   │       └── references/
+│   │           └── troubleshooting.md  # 12 known failure patterns with fixes and IT ticket templates
 │   └── rules/                      # Path-scoped rules for role-specific guidance
 ├── scripts/
 │   ├── preflight.sh                # Pre-flight checks (YubiKey, vault, network)
@@ -104,7 +113,7 @@ install_vpn: true           # mullvad (replaced expressvpn)
 │   └── auth-guide.sh               # Interactive auth step guidance
 ├── ansible.cfg                     # become: false, vault_identity_list, yaml stdout callback
 ├── Makefile
-├── site.yml                        # two plays: system (become: true) + user (become: false)
+├── site.yml                        # three plays: system (become: true) + user (become: false) + container (podman connection plugin, auto-skipped on Fedora)
 ├── requirements.yml                # pinned collection versions (community.general, containers.podman)
 ├── default.config.yml              # profile: work, os-specific defaults
 ├── config.yml                      # gitignored overrides (optional — default.config.yml has all defaults)
@@ -136,9 +145,11 @@ install_vpn: true           # mullvad (replaced expressvpn)
     └── claude/                     # Claude Code install, instance isolation (work/personal), Remote Control (personal), task queue poller (systemd timer + script)
 ```
 
-**Role ordering in site.yml** (dependencies flow top-down):
-1. `common` — OS detection, profile setup, prerequisite dirs
-2. `repos_dnf` — third-party RPM repos (must precede packages)
+**Role ordering in site.yml** (three plays, dependencies flow top-down):
+
+*Play 1 — Host system (become: true):*
+1. `common` — OS detection, profile setup, prerequisite dirs, **CSB detection** (sets `csb_restricted`, `fapolicyd_enforcing`, `sudo_unrestricted`, `needs_container_tier` facts — all checks run without root)
+2. `repos_dnf` — third-party RPM repos (must precede packages). Uses `block/rescue` on CSB — appends failures to `csb_failures` list with IT ticket templates
 3. `packages` — all install methods (dnf, brew, binary, go, pip, npm)
 4. `dotfiles` — config files (may reference installed binaries)
 5. `ssh` — keys from vault (needs dirs from common)
@@ -147,9 +158,14 @@ install_vpn: true           # mullvad (replaced expressvpn)
 8. `containers` — podman/docker config, registry auth
 9. `cloud_tools` — OpenShift/K8s/cloud CLI binaries
 10. `desktop` — i3, Alacritty, zsh (needs packages)
-11. `system` — firewall, kernel, services (become: true)
-12. `distrobox` — Fedora container (needs podman from packages)
-13. `claude` — Claude Code install, instance config, task queue (needs npm from packages)
+*Play 2 — Host user (become: false, continued):*
+11. `desktop` — i3, Alacritty, zsh (needs packages)
+12. `distrobox_create` — create Toolbx/Distrobox container, register via `add_host` for Play 3
+13. `claude` — Claude Code install via native binary, instance config, task queue
+
+*Play 3 — Container provisioning (connection: containers.podman.podman, auto-skipped on Fedora):*
+14. `container_packages` — dnf packages inside the Fedora container
+15. `container_binaries` — oc, kubectl, grype, gh, Go tools inside the container
 
 **Sudo handling:** Makefile passes `--ask-become-pass` for targets that need sudo. Alternatively, set `ansible_become_password` in vault and use `--become-password-file`.
 
@@ -173,9 +189,15 @@ lint:
 
 ### Makefile Targets
 
-| Target | Sudo? (Linux) | What it does |
+| Target | Sudo? | What it does |
 |---|---|---|
-| `make all` | yes | Full setup |
+| `make bootstrap` | yes | Install ansible-core, git, ykpers; install Galaxy collections |
+| `make all` | yes | Full setup — all roles, all three plays |
+| `make minimal` | **no** | CSB-safe: dotfiles + ssh + repos (no become, no IT tickets, productive in ~30 min) |
+| `make container` | no | Create/update Toolbx/Distrobox dev container |
+| `make container-rebuild` | no | Destroy and recreate the dev container |
+| `make csb-audit` | no | Detect CSB constraints, produce compatibility report with IT ticket templates |
+| `make update` | yes | Upgrade Galaxy collections + re-run full playbook |
 | `make dotfiles` | no | Deploy config files |
 | `make packages` | yes | Install packages |
 | `make repos` | no | Clone all git repos |
@@ -190,6 +212,8 @@ lint:
 | `make containers` | no | Podman/Docker config, registry auth |
 | `make distrobox` | no | Distrobox + Fedora container |
 | `make claude` | no | Claude Code install + instance config |
+| `make smoke-test-host` | no | Host-level post-run verification |
+| `make smoke-test-container` | no | Container-level verification |
 
 Utilities: `make check` (dry run — limited: `shell:`/`command:`/binary downloads are skipped in `--check` mode), `make diff` (dotfile diffs via `--check --diff --tags dotfiles`), `make vault-edit`, `make lint` (ansible-lint + yamllint), `make smoke-test` (post-run verification, local-only — needs YubiKey/Tailscale hardware).
 
@@ -206,7 +230,7 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **Dev:** gh, golangci-lint, gofumpt, govulncheck, gci, shellcheck, shfmt, yamllint, grype (verify ≥v0.104.1, CVE-2025-65965 credential leak in earlier versions), ansible-lint
 - **K8s code-gen:** controller-gen, client-gen, informer-gen, lister-gen, deepcopy-gen, applyconfiguration-gen, defaulter-gen
 - **Python (pip):** anthropic, pydantic, rpm-lockfile-prototype.
-- **npm (dev):** commitlint (replaces gitlint — unmaintained 3+ years). Conventional Commits config, runs via husky git hook.
+- **npm (dev):** commitlint (replaces gitlint — last stable release March 2023). Conventional Commits config with scope enum matching role names. Runs via `core.hooksPath` or `pre-commit` framework (husky adds friction for non-Node.js contributors). Supports `--signoff` commits via `signed-off-by` rule.
 - **Scripts (curl to /usr/local/bin):** transcrypt (transparent git encryption, pure Bash). SOPS + age (value-level encryption for structured config files).
 
 **Work profile:**
@@ -217,7 +241,9 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 - **OVN/OVS:** ovn-nbctl, ovn-sbctl, ovs-vsctl, ovn-trace, ovn-detrace
 - **Networking:** tcpdump, bridge-utils, conntrack-tools, ethtool, iperf3, traceroute, iproute
 - **Build:** clang (OVS/eBPF builds)
-- **Desktop:** i3, i3status, i3lock, dmenu, Alacritty, nm-applet, scrot, feh, brightnessctl, gvim (vim-X11), dejavu-sans-mono-fonts, terminus-fonts, xss-lock. For Sway: swayidle + swaylock
+- **Desktop (Fedora/Sway):** sway, swayidle, swaylock, wofi (dmenu replacement), Alacritty, grim+slurp (screenshot), brightnessctl, gvim, dejavu-sans-mono-fonts, terminus-fonts
+- **Desktop (RHEL 10 CSB/GNOME):** GNOME 47 (Wayland-only, X.Org removed). **i3 cannot run on RHEL 10** (X11-only WM, not in EPEL 10). Install **Pop Shell** or **Tiling Shell** GNOME extension for keyboard-driven tiling. Use `loginctl lock-session` instead of xss-lock. GNOME handles display management natively (no autorandr/xrandr).
+- **Desktop (legacy X11/Fedora):** i3, i3status-rust, i3lock, dmenu, xss-lock, autorandr. Phase out as X11 is removed.
 - **Security:** yubikey-manager (ykman), bubblewrap, socat (Claude Code sandbox)
 
 ### Dotfiles
@@ -229,14 +255,16 @@ Use `/laptop-setup` skill instead of bare `make all` for guided setup with diagn
 
 Key custom settings to preserve:
 - **zshrc (keep)**: oh-my-zsh (gallois theme, plugins: git/python/history-substring-search), `EDITOR=vim`, `AWS_PROFILE=aws-acm-subm`, `eval "$(direnv hook zsh)"`, `eval "$(zoxide init zsh)"`, `zstyle ':omz:update' mode disabled` (must appear before `source $ZSH/oh-my-zsh.sh` — auto-update conflicts with Ansible-managed config).
-- **zshrc (remove)**: `github` plugin, `command-not-found` (biggest startup slowdown — 200-300ms), `gnu-utils` (no-op on Linux), Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
+- **zshrc (remove)**: `github` plugin (negligible overhead but unused), `command-not-found` (minimal overhead on Fedora — just defines a function wrapper, not the "200-300ms" often claimed; the real OMZ offenders are nvm/compinit/heavy themes), `gnu-utils` (no-op on Linux), Vertex AI exports, stale `GOOGLE_CLOUD_PROJECT`, hardware-specific Bluetooth aliases.
 - **zshrc (future)**: Starship prompt as hybrid replacement (5-15ms render vs gallois 50-200ms, Rust, cross-shell). Set `ZSH_THEME=""` and add `eval "$(starship init zsh)"` after oh-my-zsh source.
 
   **Shell aliases and functions:**
   ```bash
   # Claude Code in tmux (always — sessions survive disconnects)
   cw() {  # Claude Work — creates/attaches tmux session named after current dir
-    local s="work-${PWD##*/}"
+    command -v tmux &>/dev/null || { echo "ERROR: tmux not found"; return 1; }
+    local dir="${PWD##*/}"; dir="${dir//[^a-zA-Z0-9_-]/_}"; [[ -z "$dir" ]] && dir="root"
+    local s="work-${dir}"
     tmux new-session -As "$s" "source ~/.config/claude/work-env && claude; zsh"
   }
   # ~/.config/claude/work-env (mode 0600, deployed by Ansible, NOT in zshrc):
@@ -245,15 +273,20 @@ Key custom settings to preserve:
   #   export ANTHROPIC_VERTEX_PROJECT_ID=<vertex-project-id>
   #   export CLOUD_ML_REGION=global
   ccp() {  # Claude Code Personal (not `cp` — shadows copy command)
+    command -v tmux &>/dev/null || { echo "ERROR: tmux not found"; return 1; }
     # Guard: prevent sending work code through personal Anthropic account
-    if [[ "$PWD" == */src/openshift/* || "$PWD" == */src/submariner-io/* || "$PWD" == */src/stolostron/* || "$PWD" == */src/INTERNAL_GIT/* || "$PWD" == */src/INTERNAL_GITLAB/* ]]; then
+    # Uses pwd -P to resolve symlinks (prevents symlink bypass)
+    local phys="$(pwd -P)"
+    if [[ "$phys" == */src/openshift/* || "$phys" == */src/submariner-io/* || "$phys" == */src/stolostron/* || "$phys" == */src/INTERNAL_GIT/* || "$phys" == */src/INTERNAL_GITLAB/* ]]; then
       echo "ERROR: Work directory detected. Use 'cw' for work repos."; return 1
     fi
-    local s="personal-${PWD##*/}"
-    tmux new-session -As "$s" "unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION; CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
+    local dir="${PWD##*/}"; dir="${dir//[^a-zA-Z0-9_-]/_}"; [[ -z "$dir" ]] && dir="root"
+    local s="personal-${dir}"
+    tmux new-session -As "$s" "unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION GOOGLE_APPLICATION_CREDENTIALS GOOGLE_CLOUD_PROJECT; CLAUDE_CONFIG_DIR=~/.claude-personal claude; zsh"
   }
   cls() { tmux list-sessions 2>/dev/null | grep -E "work-|personal-"; }
-  ca() { tmux attach -t "$(tmux list-sessions -F '#{session_name}' | grep -E 'work-|personal-' | head -1)"; }
+  ca() { tmux list-sessions -F '#{session_name}' | grep -E 'work-|personal-' | fzf --height=40% --prompt="Attach: " | xargs -r tmux attach -t; }
+  cwt() { local n="${1:?Usage: cwt <worktree-name>}"; tmux new-session -As "work-$n" "source ~/.config/claude/work-env && claude --worktree '$n'; zsh"; }
   cstatus() {  # What Claude is doing across all sessions
     for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E 'work-|personal-'); do
       echo "=== $s ==="; tmux capture-pane -t "$s" -p | tail -3; echo; done
@@ -262,8 +295,8 @@ Key custom settings to preserve:
   # Device access (Tailscale + mosh)
   alias laptop='mosh laptop.tail'
   alias mac='mosh mac-desktop.tail'
-  laptop-claude() { mosh laptop.tail -- tmux attach -t "${1:-work}"; }
-  mac-claude() { mosh mac-desktop.tail -- tmux attach -t "${1:-personal}"; }
+  laptop-claude() { mosh laptop.tail -- tmux new-session -A -s "${1:-work}"; }
+  mac-claude() { mosh mac-desktop.tail -- tmux new-session -A -s "${1:-personal}"; }
 
   # Remote Control (personal Mac)
   alias rc='claude --remote-control'
@@ -296,12 +329,13 @@ Key custom settings to preserve:
   - `pushInsteadOf` routes pushes over SSH (YubiKey touch) while pulls stay HTTPS (no touch).
   - SSH commit signing (`gpg.format=ssh`, `commit.gpgsign=true`) using no-touch YubiKey key — Claude Code signs automatically, pushing still requires tap.
   - `includeIf "gitdir:~/src/openshift/"` → work email, `includeIf "gitdir:~/src/dfarrell07/"` → personal email.
-- **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste, `monitor-activity on`, `visual-activity on` (alerts when background Claude sessions produce output).
+- **tmux.conf**: Ctrl+A prefix, vi-mode copy/paste, `monitor-silence 30` (fires when Claude finishes — better than `monitor-activity` which fires during work), `visual-activity both` (propagates terminal bell for desktop notifications). Set `history-limit 50000` (default 2000 is too small for Claude sessions).
+- **zshrc guard**: add `claude()` shell function that errors when `CLAUDE_CONFIG_DIR` is unset — prevents bare `claude` from running in ambiguous third state (neither work nor personal). The `cw`/`ccp` functions use `command claude` to bypass the guard.
 - **zlogin**: `xset s off`, `xset -dpms` (prevent display sleep). Remove: `xrdb ~/.Xdefaults` (Xdefaults dropped), RVM loading (dropped), commented-out bluetooth/inotify.
 - **bashrc**: PATH setup (`~/.local/bin`, `~/bin`). Remove: stale `GOOGLE_CLOUD_PROJECT`.
 - **vimrc**: 2-space hard tabs, 5000 history, restore cursor position, spell check, clipboard sharing.
-- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), internal git servers (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath /run/user/%i/ssh/%r@%h-%p`, `ControlPersist 60` — one YubiKey tap opens a 60-second multiplexed session (shorter than 600s to limit socket hijack window). Uses `/run/user/` instead of `~/.ssh/sockets/` to prevent Distrobox containers from accessing sockets via shared home directory. Create dir with mode 0700 via dotfiles role.
-- **i3 config**: Alt modifier, PulseAudio/PipeWire volume keys (pactl works via pipewire-pulseaudio compat), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (i3lock via xss-lock). Display setup script for external monitors (xrandr, hardware-specific — template with auto-detect or manual per-machine override).
+- **ssh config**: `VisualHostKey=yes`, host entries for gh/gist (YubiKey identity), internal git servers (RH git key, work profile only). GitHub host gets `ControlMaster auto`, `ControlPath /run/user/%i/ssh/%r@%h-%p`, `ControlPersist 120` — one YubiKey tap opens a 120-second multiplexed session (60s is too short for interactive use; 120-300s is the FIDO2 recommendation). Uses `/run/user/` (`%i` = numeric UID, created by pam_systemd with mode 0700). Create `ssh/` subdirectory via systemd-tmpfiles (`/etc/tmpfiles.d/ssh-sockets.conf`: `d /run/user/%U/ssh 0700 - - -`). Note: Distrobox shares `/run/user/` by default too — use `--unshare-all` on untrusted containers for full socket isolation.
+- **i3 config**: Alt modifier, PipeWire volume keys (`pactl` via `pipewire-pulseaudio` compat — use `@DEFAULT_SINK@` not hardcoded sink), brightness keys, dmenu, nm-applet autostart, auto-lock on idle (`xss-lock --transfer-sleep-lock -- i3lock --nofork`). Display management: use **autorandr** (`dnf install autorandr`) for automatic xrandr profile management based on EDID fingerprints — saves per-machine xrandr scripts. Consider **i3status-rust** over plain i3status (Rust, D-Bus events, TOML config, themes).
 - **gh CLI**: `co` alias for `pr checkout`, HTTPS protocol (ensures clones/pulls don't need YubiKey — gitconfig `pushInsteadOf` handles the SSH push gate separately). Note: current config says `git_protocol: ssh` — must change to `https` during setup.
 - **gh hosts.yml**: `github.com`, user `dfarrell07`, `git_protocol: https`.
 
@@ -337,34 +371,34 @@ Full repo list must be populated in `repos.yml` during implementation phase 4. C
 
 ### Third-Party RPM Repos (dnf-based OS only)
 
-acli, docker-ce, mullvad, gh-cli, google-chrome, google-cloud-sdk, rpmfusion (free + nonfree + nvidia + steam), slack, redhat. Each gated by a boolean with per-OS defaults.
+acli, docker-ce, mullvad (package: `mullvad-vpn`, Fedora only — no official RHEL repo), gh-cli, google-chrome, google-cloud-sdk, rpmfusion (free + nonfree + nvidia + steam), slack, redhat. Each gated by a boolean with per-OS defaults.
 
 ### System (become: true, Linux only)
 
 Firewall, SSH hardening, and Tailscale config in the Security section. Remaining system and security hardening config:
 
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
-- **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
+- **auditd rules**: deploy to `/etc/audit/rules.d/claude-code.rules`. Must use absolute paths (auditd has no shell expansion — Ansible template with `ansible_env.HOME`). Use `-p wa` (write/attr) for noisy paths (ssh-agent/gpg-agent read constantly): `~/.ssh/`, `~/.gnupg/`, `~/.kube/config`. Use `-p r` (read) for rarely-accessed high-value files: `~/.aws/`, `~/.vault_pass`, `~/.claude/.credentials.json`. Add `never` exclusion rules for `/usr/bin/ssh-agent` and `/usr/bin/gpg-agent` BEFORE watch rules (first-match wins). Separate audit keys: `-k claude-sensitive-read` and `-k claude-sensitive-write`.
 - **BIOS hardening** (ThinkPad): set Supervisor Password, disable USB/PXE boot, set Thunderbolt security to "Secure Connect" (`boltctl` manages runtime authorization), disable Intel AMT if unused. Without BIOS password, physical access bypasses Secure Boot.
-- **USBGuard**: deploy on all Linux machines (CSB may already have it via STIG). Whitelist YubiKey (`1050:0407` — OTP+U2F+CCID default mode), Moonlander (`3297:1969`), and Moonlander DFU bootloader (`0483:df11` — needed for firmware flashing). Block all other USB devices by default. `usbguard generate-policy` for initial setup.
+- **USBGuard**: deploy on all Linux machines (CSB may already have it via STIG — check before layering). Install `usbguard usbguard-selinux usbguard-notifier`. Whitelist YubiKey (`1050:*` — PID changes if interfaces are reconfigured via ykman), Moonlander (`3297:1969`), Moonlander DFU bootloader (`0483:df11`). Add `allow with-connect-type "hardwired"` for built-in laptop devices (keyboard, touchpad, webcam, BT). Block all other USB devices by default. Use `usbguard generate-policy -P` for initial discovery, then codify into Ansible templates (do NOT run generate-policy via Ansible on remote machines). Known issue: brief block/allow cycle can disrupt YubiKey challenge-response — pre-configured allow rules mitigate this.
 - **Kernel module**: blacklist intel_vbtn if non-convertible ThinkPad has false tablet-mode bug (keyboard/touchpad disabled at boot). Kernel 6.19 has improved DMI filtering — test before adding.
-- **Sysctl hardening**: `kernel.yama.ptrace_scope=1`, `kernel.kptr_restrict=1`, `kernel.io_uring_disabled=1` (unprivileged only; value 2 = ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1`.
-- **Secure Boot**: enable in BIOS. Required before kernel lockdown (`lockdown=integrity`).
-- **IPv6**: either disable (`sysctl net.ipv6.conf.all.disable_ipv6=1`) or mirror all IPv4 firewall rules for IPv6. IPv6 traffic can bypass VPN tunnels and firewall rules if only IPv4 is configured.
-- **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
-- **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes).
-- **Core dumps disabled**: `ulimit -c 0` in shell profile, `kernel.core_pattern=|/bin/false` in sysctl, `ProcessSizeMax=0` in coredump.conf. Prevents secrets from leaking to dump files.
+- **Sysctl hardening**: `kernel.yama.ptrace_scope=1` (Fedora default is 0; restricts ptrace to child processes), `kernel.kptr_restrict=1` (hides kernel pointers; do NOT use 2 which breaks perf), `kernel.io_uring_disabled=1` (RHEL disables entirely with 2; no desktop tools use io_uring), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (test with VPN split tunneling — use 2/loose if asymmetric routes break), `net.core.bpf_jit_harden=2` (hardens BPF JIT, negligible cost), `net.ipv6.conf.all.accept_redirects=0`. Already hardened on Fedora 42 (no action needed): `kernel.unprivileged_bpf_disabled=2`, `kernel.dmesg_restrict=1`, `net.ipv4.tcp_syncookies=1`, `net.ipv4.conf.all.accept_redirects=0`.
+- **Secure Boot**: enable in BIOS. Recommended alongside kernel lockdown (not strictly required — lockdown can be set independently via kernel cmdline).
+- **IPv6**: do NOT disable — both Tailscale (assigns `fd7a:` ULA addresses) and Mullvad tunnel IPv6 natively; firewalld/nftables applies zone rules to both IPv4 and IPv6 by default (unified `inet` family). Disabling IPv6 breaks Tailscale mesh addresses and services binding to `::1`. Verify with `ip -6 addr show` and an IPv6 leak test after VPN setup.
+- **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. DNS-over-TLS configuration: see Network section's DNS layered approach (resolved.conf + per-link Tailscale + Mullvad overrides).
+- **Kernel lockdown**: `lockdown=integrity` via `grubby --args="lockdown=integrity" --update-kernel=ALL` (prevents unsigned module loading, /dev/mem writes, kexec). Does NOT block perf, kprobes, or bpftrace (only `confidentiality` mode does). Blocks hibernation (sleep is fine). On Fedora 42 without Secure Boot, must be set explicitly — auto-activation only with Secure Boot. Verify: `cat /sys/kernel/security/lockdown` should show `[integrity]` (CVE-2025-1272 regression caused `[none]` on some Fedora kernels).
+- **Core dumps disabled**: `ulimit -c 0` in shell profile + `/etc/systemd/coredump.conf.d/disable.conf` with `Storage=none` and `ProcessSizeMax=0` under `[Coredump]`. Keeps systemd-coredump as handler (logs crash events to journal) but stores zero dump data. Simpler and more durable than changing `kernel.core_pattern` (which fights systemd defaults on upgrades). ABRT is not installed on modern Fedora.
 - **Encrypted swap**: Fedora uses zram-only by default (no disk-backed swap). RHEL CSB may have disk swap — verify with `swapon --show`. If disk swap exists, use dm-crypt with random key at boot via `/etc/crypttab`. `shred` is unreliable on btrfs/SSDs — prefer process substitution over writing secrets to disk.
 - **umask 077**: set in zshrc — new files owner-only by default. Also `chmod 700 ~/.claude` (parent dirs are 755 by default, exposing directory listing of 444MB+ of session transcripts). Set `cleanupPeriodDays` in Claude Code settings for explicit transcript retention.
 - **PATH ordering**: ensure `/usr/bin` before `~/.local/bin` AND `/home/linuxbrew/.linuxbrew/bin` — both are user-writable and can shadow system binaries via supply chain attacks (pip/npm/brew can drop trojans named `git`, `ssh`, `sudo`).
 - **fwupd**: `fwupdmgr get-updates && fwupdmgr update` in system role. UEFI/Thunderbolt/NVMe firmware updates.
-- **Outbound firewall (Linux)**: install OpenSnitch (`dnf install opensnitch`) for per-process outbound filtering (Linux equivalent of LuLu on Mac). Catches compromised MCP servers, supply chain attacks phoning home. **Caveats**: eBPF mode may be broken on newer kernels (use `proc` mode), NFQUEUE DNS interception conflicts with Tailscale/WireGuard (whitelist `tailscaled` + tailscale0 interface), cannot disable unprivileged user namespaces (OpenSnitch recommendation) while using rootless Podman. Not in Fedora repos (install from GitHub RPMs).
-- **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is world-listable.
+- **Outbound firewall (Linux)**: install OpenSnitch via COPR (`dnf copr enable daf/opensnitch && dnf install opensnitch opensnitch-ui`) for per-process outbound filtering. Use `proc` monitor mode (eBPF broken on kernel 6.12+, including 6.19). Add `After=systemd-resolved.service` to opensnitchd unit (Fedora 42 boot race). Whitelist Tailscale via both process rule (`/usr/sbin/tailscaled`) AND system-fw.json NFQUEUE bypass (port 41641) — process rules alone are insufficient. Cannot disable unprivileged user namespaces while using rootless Podman — accept the risk. **Alternative**: Little Snitch for Linux (April 2026, free, .rpm available, Rust + eBPF) — simpler setup but closed backend and same eBPF kernel constraints.
+- **tmux socket**: set `TMUX_TMPDIR=~/.local/run/tmux` (mode 0700) in zshrc. Default `/tmp/tmux-$UID/` is mode 0700 (not world-listable as sometimes claimed), but its existence in `/tmp` reveals tmux usage. `TMUX_TMPDIR` hides even the directory. Use `visual-activity both` (not just `on`) to propagate terminal bell for desktop notifications.
 - **X11 → Sway migration** (future, 2026 is the right window): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. i3 cannot run under XWayland — requires full Xorg session. Fedora is removing X11 sessions (GNOME X11 already dropped). Sway config reuses ~95% of i3 config (change `xrandr` → `sway output`, `feh` → `output bg`, `scrot` → `grim`+`slurp`). Claude Code sandbox works fine on Wayland. Start with dual i3+Sway setup.
-- **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
+- **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf`. **Requires helper**: logind's `lock` action emits a D-Bus signal but does not call any locker — xss-lock (i3) or swayidle (Sway) must be running to catch the signal and launch i3lock/swaylock. `HandleLidSwitchDocked=ignore` (default) is correct for external monitor use.
 - **dnf-automatic**: `dnf5 install dnf5-plugin-automatic`, enable `dnf5-automatic.timer`. Config at `/etc/dnf/automatic.conf`: `apply_updates=yes`, `upgrade_type=default` in `[commands]` section. Exclude third-party repos from auto-updates by setting `enabled=0` in their `.repo` files (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update manually with `dnf5 upgrade --enablerepo=<name>`.
-- **Services**: libvirtd, dkms, mullvad (gated), fail2ban (only if SSH is publicly exposed). Docker disabled by default (start on demand).
-- **CUPS**: disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain (GTK/Qt/Chromium dependency). If cupsd is kept, verify it listens only on localhost.
+- **Services**: libvirtd, mullvad (gated), fail2ban (only if SSH is publicly exposed). Docker disabled by default (start on demand). Note: `dkms` removed — KVM/libvirt is in-tree (no DKMS module needed). If NVIDIA or VirtualBox modules are needed, use akmods (RPM Fusion) with MOK signing instead of raw DKMS.
+- **CUPS**: mask cups-browsed (`systemd masked: true` — stronger than disable, prevents start by any means). Entry point for September 2024 RCE chain (CVE-2024-47176/47076/47175; CVE-2024-47177 was formally rejected). **Also update CUPS to >= 2.4.17** for April 2026 chain (CVE-2026-34980/34990 — targets cupsd itself, zero user interaction, chains to root). Remove `cups` daemon if not printing. `libcups` must remain (GTK/Qt/Chromium dependency, confirmed). If cupsd is kept, verify it listens only on localhost — but this only controls TCP, not cups-browsed's UDP listener.
 - **Virtualization**: libvirt, qemu-kvm
 
 ### User Environment (become: false)
@@ -378,7 +412,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 
 Two separate instances to prevent auth/data leakage between work (Vertex AI) and personal (Anthropic account):
 - Use `cw`/`ccp` shell aliases (defined in zshrc) — wrap Claude in tmux with the correct env vars per instance.
-- Never set Vertex vars in `.zshrc` globally — `CLAUDE_CODE_USE_VERTEX` checks for presence, not value.
+- Never set Vertex vars in `.zshrc` globally — while `CLAUDE_CODE_USE_VERTEX` does check value (only `1`/`true`/`yes`/`on` enable it; `0`/`false` do not), having the var set at all invites confusion.
 - Wrappers are the primary isolation mechanism, not direnv (env vars read once at startup, not updated mid-session).
 - Never run both in the same working directory. Known bugs: cross-contamination (#27658), branch swapping (#60295).
 
@@ -387,8 +421,8 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 **Data privacy:**
 - Vertex AI (work): prompts go to Google infrastructure, not Anthropic. No training. Customer-controlled retention. Telemetry to Anthropic off by default.
 - Anthropic Pro (personal): turn off "Improve Claude" in privacy settings (5-year retention if on, 30 days if off). No ZDR or DPA on Pro plan. Consumer terms, not commercial.
-- Disable non-essential telemetry: `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in both instances.
-- Transcript hygiene: set `"cleanupPeriodDays": 7` in `settings.json` (default is 30). Use `--no-session-persistence` for sensitive one-off queries. Transcripts are plaintext — full-disk encryption (LUKS/FileVault) is the at-rest protection.
+- Disable non-essential telemetry: prefer granular env vars (`DISABLE_TELEMETRY=1`, `DISABLE_ERROR_REPORTING=1`) over the umbrella `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` which has undocumented side effects (breaks feature flags — loses Opus 1M context on Max plan — and disables auto-updater).
+- Transcript hygiene: set `"cleanupPeriodDays": 7` in `settings.json` (default is 30). Use `--no-session-persistence` for sensitive one-off queries (**only works in `--print` mode**, not interactive). Transcripts are plaintext JSONL containing full conversation, tool results (including file contents), and thinking — full-disk encryption (LUKS/FileVault) is the at-rest protection. Also: `~/.claude/file-history/` stores complete file snapshots of edited files (can contain secrets).
 - Cross-contamination: running personal instance while cd'd into a work repo sends work code through Anthropic. The `ccp()` wrapper verifies the current directory before launching (see shell aliases).
 
 `~/.claude-work/CLAUDE.md` and `~/.claude-personal/CLAUDE.md` (keep under 150 lines each):
@@ -428,35 +462,45 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 
 ### Secrets Management
 
-- **Ansible Vault**: AES-256-CTR with HMAC-SHA256 encryption. Tiered vault IDs with different trust levels:
-  - **Critical** (SSH keys, production creds): password derived from YubiKey HMAC-SHA1 challenge-response (`ykchalresp -2 "memorized-pin"`). Exists in NO password manager. Both YubiKeys configured with same HMAC secret — **must program Slot 2 on both keys with identical secret (`ykman otp chalresp 2 <hex-secret>`) before first `ansible-vault encrypt`**. Paper backup of hex secret in fireproof safe.
-  - **Infra** (registry tokens, API keys): password in KeePassXC (offline `.kdbx` on USB drive, master password + YubiKey).
+- **Ansible Vault**: AES-256-CTR with HMAC-SHA256 (encrypt-then-MAC). KDF: PBKDF2-HMAC-SHA256, 10,000 iterations, 32-byte random salt. Tiered vault IDs with different trust levels:
+  - **Critical** (SSH keys, production creds): password derived from YubiKey HMAC-SHA1 challenge-response (`ykchalresp -2 "memorized-pin"`, output is 40-char hex string). Exists in NO password manager. Both YubiKeys configured with same HMAC secret — **must program Slot 2 on both keys with identical secret (`ykman otp chalresp 2 <hex-secret>`) before first `ansible-vault encrypt`**. Generate secret with `openssl rand -hex 20`. Paper backup of hex secret in fireproof safe. Note: challenge is visible in `ps` output — acceptable on single-user laptop.
+  - **Infra** (registry tokens, API keys): password in KeePassXC (offline `.kdbx` on LUKS-encrypted USB drive, master password + YubiKey challenge-response on **Slot 1** — Slot 2 is reserved for Ansible vault HMAC).
   - **Dev** (env vars, non-sensitive config): password in Bitwarden (cloud, acceptable blast radius).
-  - Password files at `~/.vault_pass_critical`, `~/.vault_pass_infra`, `~/.vault_pass_dev` (all mode 0600, outside repo).
-- **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets (critical: without this, `--check --diff` leaks decrypted vault content to terminal scrollback, tmux history, and Claude Code transcripts).
-- **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. Procedure documented in repo.
+  - **Vault password scripts** (preferred over password files — passwords never touch disk):
+    ```bash
+    # scripts/vault-pass-critical.sh (mode 0700)
+    #!/bin/bash
+    ykchalresp -2 "your-memorized-pin" 2>/dev/null
+    ```
+    In ansible.cfg: `vault_identity_list = critical@scripts/vault-pass-critical.sh, ...`. Ansible runs executable scripts and captures stdout as the password. Fallback: password files at `~/.vault_pass_*` (mode 0600) — but note all files in `vault_identity_list` must exist or Ansible errors on ALL runs, even if that vault ID isn't needed.
+- **Vault conventions**: all secret vars use `vault_` prefix, referenced from plaintext vars files (`ssh_key: "{{ vault_ssh_key }}"`). `no_log: true` on every task that handles vault-decrypted secrets (CVE-2024-8775: without this, `--check --diff` leaks decrypted vault content to terminal scrollback, tmux history, and Claude Code transcripts). On failure, `no_log` censors all diagnostics — use a toggle: `no_log: "{{ not (ansible_debug_mode | default(false) | bool) }}"`. Keep `display_args_to_stdout = false` in ansible.cfg (default, but verify — it leaks args before `no_log` takes effect).
+- **Vault rotation**: `ansible-vault rekey` when credentials are compromised or periodically. **Always commit to git before rekeying** — rekey is not atomic (shreds original before writing new file; interruption = data loss). Rekey by vault ID: `ansible-vault rekey --vault-id critical@old_pass --new-vault-id critical@new_pass <files>`. Note: inline encrypted strings (`encrypt_string`) cannot be rekeyed — must be re-encrypted individually; prefer file-level encryption for easier rotation.
 - **Templates**: never contain raw secrets — reference vault variables only. Dotfiles with interpolated secrets deployed mode 0600.
-- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks git --pre-commit --staged --redact`, in Fedora repos) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON, and base64-encoded secrets. Additional `commit-msg` hook rejects messages containing internal domain patterns (prevents AI-generated commits from leaking infrastructure names). Both deployed as git template hooks (`git config --global init.templateDir ~/.config/git/template`).
+- **Git hygiene**: `.gitignore` covers `config.yml`, `.vault_pass*`. Pre-commit hook uses **gitleaks** (`gitleaks git --pre-commit --staged --redact --max-decode-depth 2`, in Fedora repos since F40) instead of grep patterns — grep misses AWS keys (AKIA...), GitHub tokens (ghp_/gho_), GCP service account JSON. Base64-encoded secret detection requires `--max-decode-depth` (off by default). Note: `git` subcommand requires gitleaks v8.19.0+; Fedora 40 ships v8.18.2 — use `gitleaks protect --staged --redact` as fallback. Gitleaks is feature-complete/maintenance-only; Betterleaks is the successor. Additional `commit-msg` hook rejects messages containing internal domain patterns (prevents AI-generated commits from leaking infrastructure names). Both deployed via `core.hooksPath` (applies to all repos immediately, unlike `init.templateDir` which only affects new clones).
 - **Allowed signers**: `~/.config/git/allowed_signers` deployed by dotfiles role — maps email to signing public key for `git log --show-signature` verification.
 
 ### Network
 
-- **Firewall**: `public` zone, not FedoraWorkstation (which opens 1025-65535). Default-DROP policy. Allow only SSH (non-default port) + specific dev ports as needed. Allow essential ICMP (destination-unreachable, time-exceeded, echo-reply) — full stealth breaks Path MTU Discovery.
-- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard underneath — cryptographically invisible to port scanners. DERP relays are end-to-end encrypted.
-  - **Tailnet Lock** (free on Personal plan, GA): prevents rogue node injection even if coordination server is compromised. Does NOT protect DNS mappings — a compromised server can spoof MagicDNS.
-  - **MagicDNS fix**: `tailscale set --accept-dns=false`, configure split DNS manually (`*.ts.net` → 100.100.100.100, everything else → Cloudflare DoT). MagicDNS conflicts with `DNSOverTLS=yes` if both claim the default DNS route.
-- **VPN isolation**: never run Mullvad and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts. Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
+- **Firewall**: `drop` zone (not `public`, which allows ssh/mdns/dhcpv6-client; not FedoraWorkstation, which opens 1025-65535). `drop` silently discards all unsolicited inbound. Add SSH on non-default port: `firewall-cmd --permanent --zone=drop --add-port=<port>/tcp`. Allow essential ICMP via `icmp-block-inversion` (listed types become allowed): `destination-unreachable`, `fragmentation-needed` (critical for PMTUD), `time-exceeded`, `echo-reply`. **After `firewall-cmd --reload`, restart tailscaled** — reload wipes Tailscale's nftables rules. Tailscale manages its own nftables table with higher-priority hooks; do NOT add tailscale0 to trusted zone on workstations.
+- **Tailscale**: mesh VPN for machine-to-machine access. No open ports on public interfaces. WireGuard silently drops unauthenticated packets — port scanners cannot detect it (but passive traffic analysis can fingerprint WireGuard flows via packet sizes and 25-second keepalives). DERP relays are end-to-end encrypted (architectural guarantee — relay never possesses session keys, TCP-only on port 443).
+  - **Tailnet Lock** (available on Personal plan per docs, GA since June 2025): prevents rogue node injection even if coordination server is compromised. Does NOT protect DNS mappings, ACLs, or packet filters — a compromised server can spoof MagicDNS (mitigated by WireGuard encryption — spoofed DNS alone can't decrypt traffic). Does not protect against compromised admin accounts.
+  - **DNS layered approach**: `tailscale set --accept-dns=false`, then configure three layers:
+    1. Global DoT fallback: `/etc/systemd/resolved.conf.d/99-dot.conf` — `DNS=1.1.1.1#cloudflare-dns.com`, `Domains=~.`, `DNSOverTLS=yes`, `LLMNR=no`
+    2. Tailscale split DNS: `resolvectl dns tailscale0 100.100.100.100`, `resolvectl domain tailscale0 '~your-tailnet.ts.net'`, `resolvectl default-route tailscale0 false`, `resolvectl dnsovertls tailscale0 no` (100.100.100.100 does NOT support DoT — traffic is local loopback, never hits network)
+    3. Mullvad (automatic): modern mullvad-daemon sets its DNS on `wg-mullvad` with DoT disabled; captures `~.` when connected, global Cloudflare DoT reclaims when disconnected
+    Note: tailscaled periodically resets DNS config even with `--accept-dns=false` — deploy a systemd watcher service to re-apply split DNS. Add `unmanaged-devices=interface-name:tailscale*` in `/etc/NetworkManager/conf.d/`.
+- **VPN isolation**: never run Mullvad and Red Hat VPN simultaneously — routing conflicts leak traffic between contexts (general dual-VPN problem, not Mullvad-specific). Verify routes with `ip route` after connecting. Check DNS leaks with `resolvectl status`.
 
 ### SSH
 
-- **Server hardening** (`/etc/ssh/sshd_config`): `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`, `MaxAuthTries 3`, `LoginGraceTime 30`, `AllowUsers <username>`, `X11Forwarding no`, `AllowAgentForwarding no`, `AllowTcpForwarding no`, `ClientAliveInterval 300`, `ClientAliveCountMax 2`.
-- **Post-quantum SSH**: Fedora crypto-policies block PQ KEX by default. Fix: `sudo update-crypto-policies --set DEFAULT:TEST-PQ` or add `KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256` to `~/.ssh/config`. Verify: `ssh -vT git@github.com 2>&1 | grep kex` should show `sntrup761`. Protects session data from "harvest now, decrypt later" attacks. PQ identity keys (ML-DSA) not yet available in production OpenSSH.
-- **Non-default port**: noise reduction (eliminates automated bot traffic), not a security control. Keep below 1024 (privileged) to prevent local attackers from binding if sshd is down.
+- **Server hardening** (`/etc/ssh/sshd_config`): `PasswordAuthentication no`, `KbdInteractiveAuthentication no` (replaces deprecated `ChallengeResponseAuthentication`), `PermitRootLogin no`, `PermitEmptyPasswords no`, `HostbasedAuthentication no`, `PermitUserEnvironment no` (prevents `LD_PRELOAD` injection via `~/.ssh/environment`), `MaxAuthTries 3`, `MaxSessions 2`, `LoginGraceTime 30`, `AllowUsers <username>`, `X11Forwarding no`, `AllowAgentForwarding no` (FIDO2 keys cannot be agent-forwarded; use `ProxyJump` for hops), `AllowTcpForwarding no`, `ClientAliveInterval 300`, `ClientAliveCountMax 2`, `LogLevel VERBOSE` (logs key fingerprints on login), `UsePAM yes` (required on Fedora/RHEL for pam_systemd). Do NOT set `Ciphers`/`MACs`/`KexAlgorithms` in sshd_config — let the system crypto-policy manage these (`update-crypto-policies --set DEFAULT:NO-SHA1` or `FUTURE` for stronger defaults).
+- **Post-quantum SSH**: Fedora 42 crypto-policies block PQ KEX by default. Preferred fix for CSB (no sudo): add `KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256` to `~/.ssh/config` (user config takes precedence over system crypto-policy). System-wide alternative: `dnf install crypto-policies-pq-preview && update-crypto-policies --set DEFAULT:TEST-PQ` (note: `TEST-PQ` enables ML-KEM only, not sntrup761 — still need `~/.ssh/config` for sntrup761). RHEL 10.1+ enables PQ KEX by default — no action needed on RHEL. Verify: `ssh -vT git@github.com 2>&1 | grep "kex: algorithm"` should show `sntrup761` (GitHub deployed sntrup761 September 2025; mlkem768 not yet supported by GitHub). PQ identity keys (ML-DSA) not yet in production OpenSSH.
+- **Non-default port**: noise reduction (eliminates automated bot traffic), not a security control. Keep below 1024 (privileged) to prevent local attackers from binding if sshd is down. **SELinux**: must run `semanage port -a -t ssh_port_t -p tcp <port>` before sshd can bind to non-standard ports (requires `policycoreutils-python-utils`).
 - **fail2ban**: only if SSH is publicly exposed (see Services). Behind Tailscale with FIDO2, it generates zero bans.
 - **YubiKey FIDO2**: Ed25519-sk keys with `-O verify-required` (PIN + touch). Private key never leaves hardware. Non-resident keys preferred for fixed workstations (attacker needs both YubiKey AND key handle file on disk). See Design Decisions for firmware/EUCLEAK details.
 - **Backup YubiKey**: separate key enrolled on a second YubiKey, stored securely. Prevents lockout if primary is lost/damaged.
-- **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644. Deploy pre-seeded `known_hosts` with verified fingerprints for github.com and internal git servers (avoids TOFU, prevents leaking internal hostnames). Set `HashKnownHosts yes` in ssh config.
-- **GNOME Keyring conflict**: GNOME Keyring's SSH agent does not support FIDO2 keys — breaks signing and auth. Disable by removing `/etc/xdg/autostart/gnome-keyring-ssh.desktop` (or `mkdir -p ~/.config/autostart && cp /etc/xdg/autostart/gnome-keyring-ssh.desktop ~/.config/autostart/ && echo Hidden=true >> ~/.config/autostart/gnome-keyring-ssh.desktop`). Use OpenSSH's ssh-agent instead. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
+- **Key permissions**: `~/.ssh/` mode 0700, private keys 0600, public keys 0644. Deploy pre-seeded `known_hosts` with GitHub's public keys hardcoded in the Ansible role (verified from `https://api.github.com/meta`, not from `ssh-keyscan` which is MITM-vulnerable). Include all three key types (ed25519, ecdsa, rsa). Run `ssh-keygen -Hf` on the deployed file to hash hostnames. Set `HashKnownHosts yes` in ssh config (hashes hostname only, not key — prevents host enumeration if file is compromised).
+- **GNOME Keyring / gcr-ssh-agent conflict**: Neither gnome-keyring's SSH agent nor its GNOME 46+ replacement `gcr-ssh-agent` supports FIDO2 keys — both advertise `~/.ssh/*.pub` but fail FIDO2 signing operations. Disable: on GNOME <46 (RHEL 9): `Hidden=true` in `~/.config/autostart/gnome-keyring-ssh.desktop`; on GNOME 46+ (Fedora 42, RHEL 10): `systemctl --user disable --now gcr-ssh-agent.socket gcr-ssh-agent.service`. On i3/Sway without GDM, gnome-keyring may not start — but with GDM it starts via PAM. Replace with OpenSSH ssh-agent via systemd user service (`ssh-agent -D -a $XDG_RUNTIME_DIR/ssh-agent.socket`), set `SSH_AUTH_SOCK` in `~/.config/environment.d/ssh_auth_sock.conf`. Verify `echo $SSH_AUTH_SOCK` points to correct socket after login. Also: `-O no-touch-required` flag is not preserved when importing resident keys via `ssh-keygen -K` — keep original key handle files.
 - **Port knocking**: dropped. Unencrypted, replay-vulnerable. Tailscale replaces this — no open port to hide.
 
 ### Containers
@@ -464,7 +508,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Docker group**: never join. Docker group membership = passwordless root (can mount host filesystem, read `/etc/shadow`). Docker daemon disabled by default, started on demand only.
 - **Podman preferred**: rootless, daemonless, fork-exec model. 11 kernel capabilities vs Docker's 14.
 - **Docker rootless mode**: if Docker specifically needed, run rootless. No group membership required.
-- **Registry auth (Linux)**: `podman login --authfile ~/.config/containers/auth.json` + `chmod 0600`. Credential helpers skipped — `docker-credential-secretservice` is not in Fedora repos and requires gnome-keyring on i3.
+- **Registry auth (Linux)**: `podman login --authfile ~/.config/containers/auth.json` + `chmod 0600` (the `--authfile` flag is required for persistence — default location is `$XDG_RUNTIME_DIR/containers/auth.json` which is ephemeral tmpfs, lost on reboot). Credentials are base64-encoded (plaintext), not encrypted — file permissions are the only at-rest protection. Credential helpers skipped — `docker-credential-secretservice` is not in Fedora repos (confirmed F42) and requires gnome-keyring-daemon on i3.
 - **Registry auth (macOS)**: `docker-credential-osxkeychain` via Homebrew with `credHelpers` in auth.json. Set `REGISTRY_AUTH_FILE` env var.
 
 ### Cloud CLI Credentials
@@ -486,10 +530,10 @@ Mitigations:
 **Full credential refresh during migration** — regenerate ALL passwords (LastPass vault was exfiltrated in 2022).
 
 **Auth stack (strongest to weakest):**
-1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Docker Hub, Atlassian, Slack. Phishing-resistant, passwordless. ~20 of 100 slots.
+1. **Passkeys** (YubiKey resident keys) — GitHub, Google, AWS, Bitwarden, Atlassian. Phishing-resistant, passwordless. ~20 of 100 slots (firmware 5.7+; pre-5.7 has only 25 slots). Docker Hub and Slack do NOT support passkeys or FIDO2 — Docker Hub is TOTP-only, Slack is SMS/TOTP-only (enforce FIDO2 at IdP/SSO layer for Slack).
 2. **FIDO2 security key** (non-resident, uses no resident key slots) — npm, PyPI, Red Hat SSO. 2FA alongside password.
 3. **TOTP on YubiKey** (Yubico Authenticator, seeds on hardware) — Anthropic, remaining services. Up to 64 OATH slots (32 on firmware pre-5.7, 64 on 5.7+). Do NOT store TOTP seeds in Bitwarden (defeats 2FA purpose — same vault = single point of failure).
-4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 25+ chars), KeePassXC vault, device logins, recovery email.
+4. **Passwords** — all 20+ char random, stored in Bitwarden. Only 4 passwords memorized: Bitwarden master (Diceware 6+ words, ~77 bits entropy — word count is the real metric, not character count), KeePassXC vault, device logins, recovery email. Switch Bitwarden KDF to Argon2id immediately after account creation (default is PBKDF2; Argon2id is memory-hard, resists GPU attacks).
 5. **Recovery codes** — all in KeePassXC on encrypted USB (2 copies, 2 physical locations). Never in Bitwarden (locked out = need these).
 6. **SMS 2FA** — removed from ALL accounts. Zero exceptions.
 
@@ -499,9 +543,9 @@ Mitigations:
 
 **YubiKey dual enrollment**: both keys registered separately with every service. For TOTP, add seed to both keys at the same time before closing the setup page. No way to clone passkeys between keys.
 
-**Google Advanced Protection**: enroll both personal and work accounts. Requires security key for all logins. Strongest Google protection.
+**Google Advanced Protection**: enroll both personal and work accounts. Accepts passkeys (including YubiKey) since July 2024 — no longer requires physical security key. Strongest Google protection. Restrictions: blocks third-party app OAuth (except Google/Apple/Mozilla apps — Workspace admin can whitelist), blocks app passwords, slow account recovery by design. gcloud CLI works but ADC with non-standard scopes may need service account impersonation workaround.
 
-**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass → `rm export.csv` (shred unreliable on SSDs — full-disk encryption is the protection).
+**Migration order**: KeePassXC vault → Bitwarden account (passkey + TOTP) → store Bitwarden recovery in KeePassXC → import LastPass (prefer Bitwarden's direct import — no unencrypted CSV needed; if CSV required, delete immediately after import) → secure email (Google APP) → secure GitHub → remaining accounts → delete LastPass. For CSV cleanup: `rm export.csv` is sufficient under LUKS (shred unreliable on SSDs — FDE is the protection).
 
 **Key rotation schedule:**
 - GitHub PATs: 30-day expiry (enforced at creation), auto-revoke expired
@@ -522,7 +566,9 @@ Mitigations:
 - KeePassXC vault password → memorized (Diceware, one of 4 memorized passwords)
 - If KeePassXC password forgotten → printed recovery codes in fireproof safe (physical)
 - If both YubiKeys lost → printed HMAC hex secret in safe → configure new keys → re-derive vault passwords
-- **Test the rebuild**: periodically attempt full environment reconstruction on a VM using only backup mechanisms.
+- **Geographic redundancy**: duplicate recovery materials in a bank safe deposit box ($30-75/yr) — eliminates the fireproof safe as a single point of failure (house fire + YubiKey loss = total credential loss without this). Store: printed HMAC secret, Bitwarden recovery code, second USB with KeePassXC vault.
+- **USB drive reliability**: keep 2-3 copies of KeePassXC USB on different drives (10-20% failure rate within 5 years). Annual integrity check: mount and verify the .kdbx opens.
+- **Test the rebuild**: quarterly password recall drill (2 min), annual full rebuild drill on a VM using only backup mechanisms.
 
 ### Phone / Mobile Security
 
@@ -530,8 +576,8 @@ Mitigations:
 - GitHub Issues as task queue: phone can create issues but cannot execute anything on laptop directly.
 - If phone is extracted (Cellebrite, border search): attacker gets GitHub token, can create issues. Mitigated by `--allowedTools` whitelist on laptop's task processor + PRs require human review + container isolation.
 - Strong lockscreen PIN (not biometric alone — biometric can be compelled in some jurisdictions).
-- **Pixel hardening**: enable Advanced Protection Mode (Android 16 — hardware USB blocking, auto-reboot 72h, blocks sideloading). Set USB default to "No data transfer." Lockdown Mode (long-press Power → Lockdown) before border crossings.
-- **Work Profile isolation**: Shelter (F-Droid) for app isolation (GitHub, Claude apps in work profile). **Install Shelter before enabling APM** (APM blocks sideloading). **Cannot use Shelter if Red Hat MDM is enrolled** — Android allows only one work profile. If MDM is on this device, use MDM's work profile or a separate device.
+- **Pixel hardening**: enable Advanced Protection Mode (Android 16 — hardware USB blocking, blocks sideloading, MTE memory tagging). Auto-reboot after 72h inactivity is a Play Services feature (not APM-specific, available on all Android devices). Set USB default to "No data transfer." Lockdown Mode (long-press Power → Lockdown) before border crossings.
+- **App isolation**: prefer **Android Private Space** (Android 15+, built-in) over Shelter — no sideloading needed, coexists with MDM work profiles (solving the one-work-profile limit), stronger OS integration. Shelter (F-Droid) is minimally maintained (last release Dec 2023) and cannot receive F-Droid updates while APM blocks sideloading. If Red Hat MDM is enrolled, Private Space is the only option (it is NOT a work profile).
 - **GrapheneOS** (optional, for frequent travelers): 18h auto-reboot (vs 72h stock), duress PIN (silent factory reset), stronger USB blocking. Compatible with GitHub Mobile, Claude app via Sandboxed Google Play.
 
 ### Travel
@@ -544,26 +590,27 @@ Mitigations:
 
 ### Claude Code Security
 
-**Instance isolation:** See Claude Code Configuration section. Key additions for security:
-- `~/.claude.json` is shared regardless of config dir — low-impact but avoid simultaneous runs when possible.
+**Instance isolation:** See Claude Code Configuration section. `CLAUDE_CONFIG_DIR` provides full isolation — `.claude.json` lives inside the config dir when set (not shared at `~/`). The only shared state is IDE discovery files (`~/.claude/ide/`), which is intentional and low-risk. Avoid simultaneous runs in the same working directory (branch swapping #60295).
 
 **Repo trust (cloned repos can attack Claude Code):**
 - Malicious CLAUDE.md files inject into Claude's system prompt — can instruct arbitrary file reads and exfiltration.
 - Malicious `.mcp.json` starts attacker-controlled processes with full user privileges at Claude Code startup.
-- Malicious `.claude/settings.json` can enable `enableAllProjectMcpServers` to auto-approve MCP servers (TrustFall, unpatched).
+- Malicious `.claude/settings.json` can enable `enableAllProjectMcpServers` to auto-approve MCP servers (TOFU/rug-pull attack class — server modifies tool schemas mid-session to exfiltrate credentials). Use `enabledMcpjsonServers` whitelist instead.
 - Malicious `.envrc` (direnv) can redirect `ANTHROPIC_BASE_URL` to exfiltrate API keys.
 - Git `core.fsmonitor` in crafted repos executes code when Claude runs `git status`.
 
 **Mitigations (deploy via Ansible):**
-- Add file-read deny rules: `Read(~/.ssh/**)`, `Read(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass*)`, `Read(~/.config/gh/**)`, `Read(~/.config/gcloud/**)`, `Read(~/.config/acli/**)`, `Read(~/.config/containers/auth.json)`, `Read(~/.claude-work/**)`, `Read(~/.claude-personal/**)`, `Read(/run/host/**)` (Distrobox exposes host filesystem at `/run/host`, bypassing `~/` deny patterns)
+- Add file deny rules (both Read AND Edit for each path): `Read(~/.ssh/**)`, `Edit(~/.ssh/**)`, `Read(~/.aws/**)`, `Edit(~/.aws/**)`, `Read(~/.kube/**)`, `Read(**/.env)`, `Read(~/.vault_pass*)`, `Read(~/.config/gh/**)`, `Read(~/.config/gcloud/**)`, `Read(~/.config/acli/**)`, `Read(~/.config/containers/auth.json)`, `Read(~/.claude-work/**)`, `Read(~/.claude-personal/**)`, `Read(//run/host/**)` (note `//` prefix for absolute paths — without it, interpreted as relative to project root). Deny rules apply to built-in tools + recognized Bash commands (cat, head) but NOT arbitrary subprocesses (Python, Node) — sandbox is needed for OS-level enforcement. Deny rules have had implementation bugs (compound command bypass fixed in v2.1.90) — verify rules work after setup
 - `git config --global core.hooksPath ~/.config/git/hooks` — override per-repo hooks
 - `git config --global core.fsmonitor false` — prevent fsmonitor code execution
 - Remove `git config --global safe.directory /tmp` (current machine has this — allows malicious repos in world-writable /tmp to execute hooks)
-- Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc **and hooks in settings.json** before running Claude in any new repo. Hooks execute outside sandbox with full user privileges (CVE-2025-59536). Consider `disableAllHooks` or `allowManagedHooksOnly` in managed settings.
-- Enable Claude Code sandbox (`bubblewrap`): `"sandbox": {"enabled": true}` in settings
+- `git config --global safe.bareRepository explicit` — blocks nested bare repo attacks (the primary fsmonitor delivery mechanism). Note: `core.fsmonitor false` is defense-in-depth only — local `.git/config` overrides global settings.
+- Inspect CLAUDE.md, .mcp.json, .claude/settings.json, .envrc **and hooks in settings.json** before running Claude in any new repo. Hooks execute outside sandbox with full user privileges (CVE-2025-59536, patched v1.0.111). Consider `disableAllHooks` or `allowManagedHooksOnly` in managed settings.
+- Enable Claude Code sandbox (`bubblewrap`): `"sandbox": {"enabled": true, "allowUnsandboxedCommands": false, "failIfUnavailable": true}`. **Sandbox only covers Bash commands** — Read/Edit/Write, MCP servers, and hooks all run on the host unsandboxed. Add `"denyRead"` for `~/.ssh`, `~/.aws` in sandbox config as defense-in-depth (default read is wide open). For Distrobox: `"enableWeakerNestedSandbox": true`. MCP servers run outside sandbox entirely — bubblewrap cannot restrict them.
+- Protect direnv from malicious `.envrc`: the primary defense is review before `direnv allow` (direnv blocks all `.envrc` until explicit approval). The `keep_vars` wiki pattern requires function definitions in `direnvrc` plus `reset_kept` — complex and cannot protect against malicious files that don't cooperate. Simpler approach: never auto-whitelist directories containing cloned repos (avoid `[whitelist] prefix` in `direnv.toml` for `~/src/`). Place `eval "$(direnv hook zsh)"` after `source $ZSH/oh-my-zsh.sh` in zshrc.
 
 **Supply chain incidents (2026):**
-- Claude Code npm: source leak + concurrent axios trojan (March 2026). Pin exact npm versions.
+- Claude Code npm: source leak (v2.1.88) + concurrent axios trojan on npm (March 31, 2026). **Install via native binary (`curl -fsSL https://claude.ai/install.sh | bash`), not npm** — npm installation deprecated since v2.1.15 (Jan 2026). Native binary is code-signed, GPG-verified, zero npm dependencies.
 - Bitwarden CLI npm: 90-minute trojan in `@bitwarden/cli@2026.4.0` (April 2026). Verify on 2026.4.1+.
 - Multiple MCP server CVEs (Inspector, Filesystem, Git). Audit MCP servers before enabling.
 
@@ -573,7 +620,7 @@ Mitigations:
 
 **What needs fixing:** SSH key exchange — enable ML-KEM/sntrup761 (Fedora blocks PQ KEX by default). Chrome/Firefox already do PQ TLS. Tailscale has no PQ yet (monitor).
 
-**What to wait for:** PQ identity keys for SSH (ML-DSA, ~2027+), PQ FIDO2 passkeys (~2027-2028), PQ git signing (blocked on OpenSSH/GnuPG), PQ TLS certificates (CA/Browser Forum, ~2027). YubiKey 5 series may need hardware replacement for PQ — check Yubico's PQ firmware roadmap.
+**What to wait for:** PQ identity keys for SSH (ML-DSA, ~2027+, multiple competing IETF drafts, no OpenSSH timeline announced), PQ FIDO2 passkeys (~2027-2028, IANA added ML-DSA to COSE codelist April 2025, CTAP protocol updates still needed), PQ git signing (OpenSSH signing path still blocked; GnuPG/OpenPGP PQ signatures close — IETF draft nearing ratification, Sequoia PGP has working ML-DSA+EdDSA implementation), PQ TLS certificates (CA/Browser Forum, ~2027). YubiKey 5 series **will** need hardware replacement for PQ — Yubico confirmed current hardware cannot support PQ algorithms (new hardware targeted ~2027).
 
 **"Harvest now, decrypt later" priority:** SSH sessions (fix now) > API calls over TLS (mostly fixed by browsers) > Tailscale traffic (can't fix yet) > data at rest (already safe).
 
@@ -584,7 +631,7 @@ Mitigations:
 - Sudo password from vault, not hardcoded. Set `become_exe: /usr/bin/sudo` in ansible.cfg (Ansible searches PATH for sudo — a trojan `~/.local/bin/sudo` could intercept the become password).
 - All module names use FQCN (`ansible.builtin.copy`, not `copy`).
 - All `shell:`/`command:` tasks have `changed_when:` and idempotency guards (`creates:`, `when:`).
-- `requirements.yml` pins all external collection versions. Galaxy has limited namespace protection (manual review for custom namespaces, but auto-created namespaces matching GitHub usernames are not vetted for typosquatting). `source` in requirements.yml pins the server, not the collection identity — version pinning is the real defense. Run `ansible-galaxy collection verify` after install (checks file integrity against published manifest). `--keyring` GPG verification available but only on private Automation Hub, not public Galaxy.
+- `requirements.yml` pins all external collection versions. Galaxy has limited namespace protection (manual review for custom namespaces, but auto-created namespaces matching GitHub usernames are not vetted for typosquatting). `source` in requirements.yml pins the server, not the collection identity — version pinning is the real defense. Run `ansible-galaxy collection verify` after install (compares checksums against Galaxy server; does not verify dependencies — each must be verified separately). `--keyring` GPG verification is a client-side feature but public Galaxy does not serve signatures — only private Automation Hub and self-hosted Galaxy NG with signing configured provide server-side signatures. Published collection versions on public Galaxy are immutable per official docs, but this is policy, not cryptographic guarantee — no hash pinning detects server-side changes.
 - **Ansible repo integrity**: commit signing enforced via branch protection. Consider `ansible-sign` for GPG project-level verification before `make all` runs on a fresh machine.
 - **Audit logging**: Claude Code logs full JSONL transcripts to `~/.claude/projects/`. Enable OpenTelemetry for structured monitoring: `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_LOGS_EXPORTER=console`, `OTEL_LOG_TOOL_DETAILS=1`. Add auditd rules for sensitive file reads (`~/.ssh/`, `~/.aws/`, `~/.kube/`, `~/.vault_pass`).
 
@@ -596,7 +643,7 @@ Items that only apply to macOS (personal Mac desktop):
 
 **Packages (brew cask):** alacritty, google-chrome, aerospace (i3-like tiling WM), bitwarden, keepassxc, slack, docker (if needed)
 
-**YubiKey FIDO2 fix:** macOS built-in OpenSSH lacks FIDO2 support. Must install `brew install openssh libfido2 ssh-askpass`. Ensure Homebrew's ssh is first in PATH. Disable Apple's launchd ssh-agent (doesn't support FIDO2) — use Homebrew's ssh-agent instead.
+**YubiKey FIDO2 fix:** macOS built-in OpenSSH lacks FIDO2 support for external keys (macOS Tahoe 26 adds Secure Enclave keys only, not YubiKey). Install `brew install openssh` (`libfido2` is a dependency, no separate install needed). For `-O verify-required` keys: `brew tap theseal/ssh-askpass && brew install theseal/ssh-askpass/ssh-askpass` (provides GUI PIN dialog). Ensure Homebrew's ssh is first in PATH via `eval "$(/opt/homebrew/bin/brew shellenv)"` in `~/.zprofile` (before oh-my-zsh). Disable Apple's launchd ssh-agent: `launchctl disable user/$UID/com.openssh.ssh-agent`. Trade-off: loses `--apple-use-keychain` integration.
 
 **Window management:** AeroSpace (`brew install --cask nikitabobko/tap/aerospace`) — i3-inspired tiling WM, TOML config, no SIP disable needed. Config at `~/.config/aerospace/aerospace.toml`.
 
@@ -644,7 +691,7 @@ RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation i
 
 **Likely works:**
 - **Podman rootless** — ships with RHEL, Red Hat supported. Needs one-time admin setup of `/etc/subuid` and `/etc/subgid`
-- **Distrobox** — installs to `~/.local/bin/`, uses rootless Podman. Potential blocker: fapolicyd may block scripts in `~/.local/bin/`. Red Hat's official alternative is Toolbx.
+- **Toolbx** (primary on CSB) — in RHEL base repos (`dnf install toolbox`), Red Hat supported, compiled Go binary (fapolicyd trusts RPM-installed). Lacks declarative config, export, and host-exec. Use `flatpak-spawn --host` for host command delegation. **Distrobox** (enhancement when EPEL available) — in EPEL 10 (`dnf install distrobox`), adds `distrobox.ini`, `distrobox-export`, `distrobox-host-exec`, `init_hooks`. curl-to-~/.local/bin install blocked by fapolicyd. Core workflow must not depend on Distrobox-exclusive features.
 - **SSH server** — STIG allows but heavily restricts (key-only, restricted ciphers, logging)
 - **SELinux** — enforcing with targeted policy, mandatory. Affects container volume mounts (use `:Z` for private label, `:z` for shared)
 - **LUKS encryption** — CSB ships with full-disk encryption
@@ -652,24 +699,29 @@ RHEL CSB (Corporate Standard Build) is Red Hat's internal hardened workstation i
 **Uncertain (needs IT verification):**
 - **Sudo access** — may be scoped to specific commands, not blanket `ALL`
 - **USBGuard** — STIG requires it, blocks unknown USB devices. YubiKeys may or may not be whitelisted by default. Adding devices requires root access to `/etc/usbguard/rules.conf`.
-- **fapolicyd** — if enforcing, breaks most developer toolchains (even Red Hat's own Ansible Automation Platform is "not supported when fapolicyd is enforcing"). This is the single biggest risk to the plan.
-- **Tailscale** — requires third-party repo + systemd service. Fallback: SSH over Red Hat VPN (OpenConnect).
+- **fapolicyd** — if enforcing, breaks most developer toolchains (Red Hat's own AAP is "not supported when fapolicyd is enforcing"). **Critical circular dependency**: fapolicyd is not namespace-aware (fanotify operates below container boundaries) — it can block Podman/Distrobox container startup itself, not just host binaries. Must exclude `tmpfs` from `watch_fs` in `/etc/fapolicyd/fapolicyd.conf` (requires root/IT ticket). Ansible's own temp-file module execution is also blocked — add `pipelining = True` to ansible.cfg as workaround. This is the single biggest risk to the plan.
+- **Tailscale** — on Fedora/macOS: standard repo install. On RHEL CSB: use **static binary + userspace networking** (`tailscaled --tun=userspace-networking`, zero system modification — no repo, no root, no TUN device, no systemd service). Applications use SOCKS proxy: `ssh -o ProxyCommand='nc -x 127.0.0.1:1055 %h %p' user@100.x.x.x`. State stored in `~/`. Alternative: Tailscale in rootless Podman container with `TS_USERSPACE=true`. Fallback without Tailscale: SSH jump host (VPS, $3-5/mo) or SSH over Red Hat VPN (OpenConnect — but cannot reach personal machines).
 
 **Impact on the plan:**
-- Distrobox becomes critical, not optional — most dev tools may need to run inside a Fedora container
-- The `make system` and `make packages` targets may partially fail on CSB — need graceful handling
-- Two-tier approach: minimal host (Podman, Distrobox/Toolbx, SSH, tmux) + full dev env inside container
+- Toolbx/Distrobox becomes critical, not optional — most dev tools must run inside a Fedora container
+- The `make system` and `make packages` targets will partially fail on CSB — use `block/rescue` pattern appending to `csb_failures` list, render CSB compatibility report with pre-drafted IT ticket templates at end of run
+- Two-tier approach: minimal host (Podman, Toolbx, SSH, tmux) + full dev env inside container
+- **Three-tier privilege model**: detect full sudo (`(ALL) ALL`) vs scoped sudo vs no sudo at playbook start via `sudo -n -l`. Note: scoped sudo and Ansible `become: true` are fundamentally incompatible (Ansible runs Python temp scripts, not literal commands from sudoers allowlist) — use `shell`/`raw` modules for scoped sudo, container-only for no sudo
+- **Proxy configuration**: CSB may route through corporate web proxy. Set `http_proxy`, `https_proxy`, `no_proxy` in `config.yml` for dnf, pip, curl, git, gh, ansible-galaxy. The preflight script should test connectivity through the proxy.
+- **Bootstrap circular dependency**: vault password scripts call `keepassxc-cli` and `bw` CLI — but those tools are installed BY the playbook. First-run workaround: manually retrieve passwords and write temporary `~/.vault_pass_*` files (mode 0600), or use Bitwarden web + KeePassXC GUI, then delete files after setup
+- **Estimated setup time**: 3-5 hours for a prepared developer on CSB (potentially spread across 2-3 days waiting for IT responses). 1-2 hours on Fedora/macOS without restrictions.
+- **`make minimal` target**: zero-IT-ticket setup using only RHEL base packages — Toolbx container with Fedora, dotfiles, git repos via HTTPS, Red Hat VPN for internal access. No Tailscale, no third-party repos, no firewall changes. Productive in ~30 minutes while IT tickets are pending.
 
 **Distrobox dev container spec:**
 
-Host provides only: Podman rootless, Distrobox (or Toolbx fallback), SSH, tmux. All dev tools live in a Fedora container.
+Host provides only: Podman rootless, Toolbx (primary) or Distrobox (when EPEL available), SSH, tmux. All dev tools live in a Fedora container. Ansible detects which tool is available and uses the appropriate path. Play 3 in `site.yml` targets the container via `containers.podman.podman` connection plugin — standard Ansible modules (dnf, copy, template) work inside the container.
 
 Container setup via `distrobox.ini` (Ansible generates from Jinja2 template, runs `distrobox assemble create`):
 - Base: Fedora latest
 - Packages via `additional_packages`: Go, Python 3, gcc, clang, vim, zsh, jq, tmux, direnv, fzf, zoxide, shellcheck, shfmt, yamllint, Node.js
 - Binary downloads via `init_hooks`: oc, kubectl, kind, kustomize, helm, opm, subctl, gh, golangci-lint, grype, yq, Claude Code
-- Container commands (podman, buildah, skopeo) delegate to host via `distrobox-host-exec` symlinks — no nested containers
-- kind works: binary in container calls host's Podman to create cluster nodes. **Host prerequisites**: `log_driver = "k8s-file"` in `~/.config/containers/containers.conf` (critical — default log driver causes timeout), load iptables kernel modules (`ip6_tables`, `ip6table_nat`, `ip_tables`, `iptable_nat`), increase `pids_limit`. `KIND_EXPERIMENTAL_PROVIDER=podman` if Docker also installed.
+- Container commands (podman, buildah, skopeo) delegate to host via `distrobox-host-exec` symlinks (`ln -sf /usr/bin/distrobox-host-exec /usr/local/bin/podman` etc.) — no nested containers. Note: `distrobox-host-exec` is a full host escape by design (uses D-Bus `HostCommand` interface with no command restriction); treat Distrobox as having equivalent access to your host session
+- kind works: binary in container calls host's Podman to create cluster nodes via `distrobox-host-exec` symlinks. **Host prerequisites**: `log_driver = "k8s-file"` in `~/.config/containers/containers.conf` under `[containers]` (critical — default `journald` driver causes timeout due to userspace relay race condition), `pids_limit = 65536` (default 2048 is insufficient for NGINX ingress), load iptables kernel modules (`ip6_tables`, `ip6table_nat`, `ip_tables`, `iptable_nat` — still needed inside kind nodes despite host nftables), sysctl `fs.inotify.max_user_watches = 524288` and `fs.inotify.max_user_instances = 512`. `KIND_EXPERIMENTAL_PROVIDER=podman` if Docker also installed (still "experimental" status).
 
 Shared with host (Distrobox default): home directory, display, network. All dotfiles, SSH keys, Claude Code config, oh-my-zsh work automatically.
 
@@ -685,7 +737,7 @@ See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 
 - **Primary role**: portable thin client for steering Claude Code remotely + Claude app for voice/connectors
 - **Remote Control**: `claude.ai/code` in Safari → steer Mac desktop sessions. Pro plan, full features.
-- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. **YubiKey limitation**: Blink Shell supports ecdsa-sk but NOT ed25519-sk keys. Preferred workaround: use Tailscale SSH (auth at network layer, no SSH key needed on iPad). Fallback: generate a separate ecdsa-sk key for iPad, or use Termius ($10/mo, supports ed25519-sk).
+- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. **YubiKey limitation**: Blink Shell supports ecdsa-sk but NOT ed25519-sk keys. Preferred workaround: use Tailscale SSH (auth at network layer, no SSH key needed on iPad — Blink's Tailscale integration is mature and supports `mosh --install-static`). Mosh does NOT work directly over Tailscale's built-in SSH server — Blink handles this via its own Tailscale integration. Fallback: generate a separate ecdsa-sk key for iPad, or use Termius ($10/mo, supports ed25519-sk).
 - **Claude app**: work account (managed, Jira/GitHub connectors) + personal account (full connectors, voice mode)
 - **GitHub app**: issue creation, PR review (same as phone but better with keyboard + larger screen)
 - **Dispatch**: send tasks from Claude iOS app to Mac Desktop app
@@ -697,7 +749,7 @@ See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 - **Remote Control**: `claude.ai/code` in Chrome → steer Mac desktop sessions. Best thin-client experience.
 - **SSH**: Crostini terminal + Tailscale (Android app, Baguette networking) → mosh/tmux to work laptop
 - **Local Claude Code**: install in Crostini (`npm install -g @anthropic-ai/claude-code`) with Anthropic Pro for light personal work. 8GB RAM limits heavy use.
-- **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use GPG/PIV workaround or Tailscale SSH (avoids key management).
+- **YubiKey limitation**: FIDO2 SSH does NOT work in Crostini (only FIDO1/U2F). Use Tailscale SSH via Android app (avoids key management entirely). Caveat: installing `tailscaled` directly in Crostini can crash the Linux container (open bug #12090) — use the Android Tailscale app for network connectivity, SSH from Crostini to Tailscale IPs.
 - **Browser-based dev**: GitHub Codespaces, code-server for VS Code workflows
 - **Keep ChromeOS** — full Linux install not worth the trade-offs on Pixelbook Go (2019, 8GB). **Confirm Developer Mode is disabled** (Crostini doesn't require it). AUE June 2029 (extended under Google's 10-year policy; verify in Settings → About ChromeOS → Update schedule). Extended updates remove Android app support. **If AUE has already passed or is imminent, remove from Tailscale mesh** — unpatched device on trusted network is a lateral movement risk. Replace or use as untrusted web-only kiosk.
 
@@ -713,7 +765,7 @@ All keyboard devices on Tailscale for SSH access. Phone stays off (GitHub Issues
 | Pixelbook | Yes (Android app) | Yes (Crostini) | Yes (Crostini) | Client (Chrome) |
 | Pixel phone | No | No | No | No (GitHub Issues) |
 
-Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACLs**: segment by trust tier — laptop is `tag:trusted` (full access), iPad/Pixelbook are `tag:casual` (SSH to laptop/Mac only, no inter-casual access), Mac is `tag:server` (accepts SSH, serves Remote Control). 90-day key expiry. Revoke lost devices immediately from admin console.
+Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACLs**: tag only the Mac as `tag:server` (tagging a device replaces user identity — user devices should use `autogroup:member` instead). ACL rules: `autogroup:member` → `tag:server:*` (full access to Mac), `autogroup:member` → `autogroup:self:22` (SSH between user devices), no inter-casual access. 90-day global key expiry (tagged devices like `tag:server` have expiry disabled by default — correct for always-on Mac). Personal plan supports ACLs, up to 3 groups, 5 SSH hosts. Revoke lost devices immediately from admin console.
 
 ### Cross-Device Patterns
 
@@ -784,7 +836,7 @@ Tailnet Lock enabled. Phone excluded to minimize attack surface. **Tailscale ACL
 - **What's already isolated**: `CLAUDE.local.md` (per-machine), auto-memory (per-user, per-machine), session transcripts (per-user), worktree filesystems. Separate OS accounts on shared machines to protect `~/.claude/`.
 - **Commit message hygiene**: add CLAUDE.md rule — "Never include conversation context, user names, or personal details in commit messages or PR descriptions. Reference code, not people."
 - **For encrypted files in shared repos**: two-tool approach (see below).
-- **For truly private notes**: Syncthing + Tailscale (peer-to-peer, no third party, E2E encrypted) instead of GitHub. Or private Gitea on Tailscale for git features without third-party trust.
+- **For truly private notes**: Syncthing + Tailscale (peer-to-peer when global discovery and relays are disabled — Tailscale makes this trivial; TLS 1.3 E2E encrypted). Conflict resolution is the main weakness (`.sync-conflict` files, manual resolution). Android official app discontinued Dec 2024 (Syncthing-Fork on F-Droid requires sideloading). **Alternative**: private Gitea on Tailscale (~250MB RAM, proper git merge/diff/history, Tailscale Serve for auto-TLS) — better for multi-device editing workflows.
 - **Watch**: Team Memory Sync (unreleased Claude Code feature) will share memories across team members per-repo — new privacy surface when it ships.
 
 **Encrypted files in shared repos — two-tool approach:**
@@ -793,20 +845,20 @@ Use **transcrypt** for transparent whole-file encryption and **SOPS+age** for st
 
 **transcrypt** (v2.3.2, pure Bash, actively maintained):
 - Transparent encryption via git clean/smudge filters — `git diff`, `git blame`, `git log -p` all work on decrypted content via textconv
-- AES-256-CBC with per-file HMAC-based deterministic salt (no phantom diffs)
+- AES-256-CBC with per-file HMAC-SHA256-based deterministic salt (no phantom diffs). Note: CBC is unauthenticated (confidentiality only, no integrity protection) — adequate for secrets-at-rest but a known design limitation. RFC #113 proposes libsodium, unimplemented.
 - Selective encryption via `.gitattributes`: `private/** filter=crypt diff=crypt merge=crypt`
 - **Contexts** feature: different passwords for different file sets (`--context=super` for admin-only files, default context for team files). Solves the "User A can see files User B can't" problem.
 - Key rotation via `--rekey` (git-crypt lacks this)
 - Claude Code compatibility: after `transcrypt` init, files are plaintext on disk — Claude reads/writes normally. Clean filter encrypts at `git add` transparently. `git diff`/`git status` show decrypted content.
 - Merge conflicts on encrypted files produce garbled markers — transcrypt includes a custom merge driver (`merge=crypt`) to handle this, but test before relying on it.
-- **Known issue**: Claude Code worktrees are broken with git-crypt (#58610) — transcrypt may have the same issue if `filter.crypt.required=true`. Test worktree creation.
-- Install: `dnf install openssl` + copy Bash script to `/usr/local/bin/`. No compilation. Does not need to remain installed after setup.
+- **Worktrees**: git-crypt worktree issue (#58610) is open in Claude Code. Transcrypt's worktree bug was fixed (issue #22), and it does NOT set `filter.crypt.required=true` by default — less likely to break worktrees. Workaround for both: `git worktree add --no-checkout`, then configure encryption before checkout.
+- Install: `dnf install openssl` + copy Bash script to `/usr/local/bin/` (also needs `column`, `hexdump` — typically pre-installed). Does not need to remain installed after setup. macOS: `brew install transcrypt`.
 
-**SOPS + age** (CNCF project + Filippo Valsorda):
+**SOPS + age** (CNCF Sandbox project — governance uncertain due to MPL licensing concern; age by Filippo Valsorda, funded through Geomys):
 - Encrypts **values only** — keys/structure stay plaintext. `git diff` shows which fields changed (not what they changed to).
 - Supports YAML, JSON, INI, ENV. Does NOT support markdown (treats it as binary blob).
 - `.sops.yaml` for path-based rules: `path_regex: ^secrets/.*\.yaml$` + `encrypted_regex: "^(password|secret|token)$"` for selective field encryption.
-- Multiple recipients: each collaborator gets their own age key. Adding/removing via `sops updatekeys`. No shared password.
+- Multiple recipients: each collaborator gets their own age key. Adding/removing via `sops updatekeys` (re-wraps DEK only). After removing a collaborator, run `sops rotate` (generates new DEK, re-encrypts values) AND rotate actual secrets they had access to. age v1.3.0+ supports PQ hybrid keys (`age-keygen -pq`, X25519 + ML-KEM-768). Hardware-bound keys via `age-plugin-yubikey` (v0.5.1).
 - `community.sops` Ansible collection: drop-in vars plugin, auto-decrypts `*.sops.yaml` files. Can replace ansible-vault for variable files (keeps value-level encryption, better diffs, multi-recipient).
 - Claude Code sees encrypted values but readable structure — can help modify config files without seeing secrets.
 - Clean/smudge filters NOT recommended for SOPS (non-deterministic encryption causes phantom diffs). Use explicit `sops --encrypt`/`--decrypt` or Makefile targets.
@@ -825,7 +877,7 @@ Use **transcrypt** for transparent whole-file encryption and **SOPS+age** for st
 **CI integration:**
 - Linting jobs (yamllint, ansible-lint, shellcheck): run without decryption. Exclude encrypted files via `.yamllint` ignore + `.ansible-lint` exclude_paths.
 - Molecule tests: pass vault passwords or transcrypt key via GitHub Actions secrets. Write to temp files, clean up after.
-- Syntax check: dummy vault password files suffice (Ansible doesn't decrypt during `--syntax-check`).
+- Syntax check: dummy vault password files work for inline encryption (`encrypt_string`). For file-level vault encryption (the plan's pattern), either exclude vault files from syntax check or provide real vault password — dummy password fails to parse fully-encrypted files.
 - Dependabot/Renovate: unaffected — they don't touch encrypted files.
 
 **Task queue container**: install transcrypt + openssl in container image. Unlock before Claude runs. Pass key via `podman secret`, not env var (Claude can read env vars).
@@ -926,17 +978,25 @@ repo: submariner-operator
 
 The task queue executor uses bare Podman with strict isolation:
 ```
-podman run --rm --read-only \
-  --tmpfs /tmp:size=100m --tmpfs /home/claude:size=50m \
+podman run --rm --read-only --read-only-tmpfs=false \
+  --tmpfs /tmp:rw,nosuid,size=100m \
+  --tmpfs /var/tmp:rw,nosuid,noexec,size=50m \
+  --tmpfs /run:rw,nosuid,noexec,size=10m \
+  --tmpfs /home/claude:rw,nosuid,size=50m \
   --memory=4g --cpus=2 --pids-limit=256 \
   --cap-drop=ALL --security-opt=no-new-privileges \
+  --ulimit nofile=1024:2048 --ulimit core=0 \
+  --no-hosts --dns=1.1.1.1 \
   --userns=keep-id -v "$REPO:/workspace:Z" \
+  -e CLAUDE_CONFIG_DIR=/home/claude/.claude \
   --secret claude-api-key,type=env,target=ANTHROPIC_API_KEY claude-task-runner \
   -p "$PROMPT" --allowedTools "$TOOLS" --max-turns 50
 ```
-- Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds
-- API key: use `podman secret create` or `--env-file` with mode 0600 — NOT `-e ANTHROPIC_API_KEY` (visible in `/proc/<pid>/cmdline` to any local process)
-- Network: pasta (Podman 5.x default for rootless). RHEL 10 may still use slirp4netns — check `podman info | grep network`. Primary defense is filesystem isolation, not network.
+- `--read-only-tmpfs=false` + explicit tmpfs mounts: full control over sizes (default auto-tmpfs gives 50% of RAM with no cap). `nosuid` on all, `noexec` on `/var/tmp` and `/run` (but NOT `/tmp` — npm writes executable scripts there).
+- `--ulimit core=0`: prevents core dumps leaking secrets. `--no-hosts`: prevents `/etc/hosts` manipulation. `--dns=1.1.1.1`: pins DNS to known resolver.
+- Only the target repo mounted (`:Z` for SELinux private label) — no home dir, no SSH keys, no cloud creds. Run `restorecon -R "$REPO"` after container exit to restore SELinux labels.
+- API key: use `podman secret create` or `--env-file` with mode 0600 — NOT `-e ANTHROPIC_API_KEY` (visible in `/proc/<pid>/cmdline` to any local process). Note: `type=mount` is more secure than `type=env` (avoids `/proc/environ` exposure) but requires app to read from `/run/secrets/`. Podman secrets are base64-encoded on disk, not encrypted.
+- Network: pasta (Podman 5.x default for rootless, also default on RHEL 10 since RHEL 9.5+). Container needs network for API calls and `git push`. Primary defense is filesystem isolation, not network.
 - Repo-scoped deploy key as sole credential (not user's gh auth)
 - Separate PAT for poller (reads issues) vs executor (pushes code)
 - Container destroyed after each task
@@ -956,14 +1016,34 @@ See `laptop-setup/2026-05-28-claude-task-queue-design.md` for full implementatio
 
 ### Bootstrap (fresh machine)
 
-**Fedora/RHEL:**
+**Fedora/RHEL** (or use `make bootstrap`):
 ```bash
+# Phase 0: If behind corporate proxy, set FIRST
+export http_proxy="http://PROXY:PORT" https_proxy="http://PROXY:PORT"
+export no_proxy="localhost,127.0.0.1,*.redhat.com"
+
+# Phase 1: Install prerequisites (ansible-core is in RHEL 10 AppStream, no EPEL needed)
 sudo dnf install ansible-core git ykpers  # ykpers provides ykchalresp
 git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
 cd ~/laptop-setup
 ansible-galaxy collection install -r requirements.yml
-# Get vault passwords (see below)
-make all
+
+# Phase 2: On RHEL CSB — run csb-audit BEFORE make all
+make csb-audit  # detects fapolicyd, sudo scope, USBGuard, etc.
+
+# Phase 3: Get vault passwords (see below) then run
+make all        # or make minimal on CSB (no become, productive in ~30 min)
+```
+
+**RHEL CSB day-one shortcut** (productive while waiting for IT tickets):
+```bash
+sudo dnf install ansible-core git toolbox  # all in RHEL base repos
+git clone https://github.com/dfarrell07/laptop-setup ~/laptop-setup
+cd ~/laptop-setup && ansible-galaxy collection install -r requirements.yml
+make minimal                    # dotfiles + repos + ssh (no sudo needed)
+toolbox create --distro fedora --release 42 fedora-dev
+toolbox enter fedora-dev        # full Fedora package set, bypasses fapolicyd
+# Inside container: sudo dnf install go python3 gh claude-code etc.
 ```
 
 **macOS:**
@@ -980,10 +1060,10 @@ make all
 Note: must install Homebrew's OpenSSH (macOS built-in doesn't support FIDO2). Verify `which ssh` shows `/opt/homebrew/bin/ssh` after setup.
 
 **Vault password retrieval** (before `make all`):
-1. Plug in YubiKey → `ykchalresp -2 "your-pin"` → write to `~/.vault_pass_critical`
-2. Mount KeePassXC USB drive → retrieve infra password → write to `~/.vault_pass_infra`
-3. Install Bitwarden (official binary, NOT npm) → `bw login` → retrieve dev password → write to `~/.vault_pass_dev` → `bw lock && unset BW_SESSION` after retrieval
-4. `make all` decrypts each vault tier. The skill's post-run phase removes vault password files (`rm ~/.vault_pass_*` — shred is unreliable on btrfs/SSDs, FDE is the at-rest protection). Better: use process substitution to avoid writing to disk at all (`--vault-password-file <(ykchalresp -2 "pin")`).
+1. Plug in YubiKey — vault password scripts call `ykchalresp` on demand (password never written to disk)
+2. Mount KeePassXC LUKS-encrypted USB drive — infra script retrieves password via `keepassxc-cli` or prompts
+3. Install Bitwarden (official binary from vault.bitwarden.com, NOT npm — April 2026 supply chain attack on `@bitwarden/cli@2026.4.0`) → `bw login` → dev script retrieves password → `bw lock && unset BW_SESSION` after setup
+4. `make all` decrypts each vault tier via scripts. No password files to clean up. Note: process substitution (`--vault-password-file <(ykchalresp ...)`) is broken on Linux — Ansible's path handling resolves `/dev/fd/63` through `/proc` and fails. Use executable scripts in `vault_identity_list` instead.
 
 **Chicken-and-egg note:** `ykpers` (Fedora) / `ykman` (brew) must be in the bootstrap install line because vault passwords are needed before the playbook can decrypt anything. `gh auth login` happens after `make all` installs gh — the git_repos role handles cloning, which needs gh auth first. Run `make packages && make dotfiles && gh auth login && make repos` if running incrementally.
 
@@ -1018,8 +1098,8 @@ jobs:
 **Molecule test infrastructure** (two scenarios):
 
 `molecule/container/` — fast feedback (seconds, runs in CI):
-- Podman container (Fedora latest), tests dotfiles, packages, config roles. Use full registry paths (`docker.io/geerlingguy/docker-fedora42-ansible:latest`). Requires `containers.podman` collection installed.
-- systemd in containers works with `privileged: true` + `command: /usr/sbin/init` + cgroup v2 volume mount (`:rw`)
+- Podman container (Fedora latest), tests dotfiles, packages, config roles. Use full registry paths (`docker.io/geerlingguy/docker-fedora42-ansible:latest`). Requires `containers.podman` collection and `pip install "molecule-plugins[podman]"` (the old `molecule-podman` package is deprecated).
+- systemd in containers works with `privileged: true` + `command: /usr/sbin/init` — no manual cgroup volume mount needed (Podman's `--systemd` mode handles cgroup v2 mounts automatically; manual mounts can cause errors)
 - Limitation: container runs as root, so `become: true` is a no-op — won't catch tasks that incorrectly escalate privileges
 - Runs on every PR via GitHub Actions (Podman 4.9.3 pre-installed on ubuntu-24.04)
 
@@ -1033,23 +1113,26 @@ jobs:
 `make test` runs both: `molecule test -s container && molecule test -s vm`
 
 **Platform-specific testing:**
-- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux. **Podman does NOT work on macOS runners** (no nested virtualization) — use Docker driver for macOS Molecule scenario. CI must skip vault-dependent roles (SSH keys, registry auth) — vault passwords not available in CI. Use `--skip-tags ssh,redhat,containers` or stub secrets via GitHub Actions secrets for integration tests.
-- **RHEL/CSB**: CentOS Stream 10 as proxy (what RHEL 10 is built from). Free Red Hat Developer Subscription for actual RHEL testing (16 systems).
+- **macOS**: GitHub Actions macOS runners (macOS 26, free for public repos). Cannot test locally on Linux. **Neither Podman nor Docker work on macOS runners** (HVF not exposed for Podman's Linux VM; Docker removed for licensing). Use Molecule's **default (delegated) driver** targeting localhost — the runner IS the macOS test target. No containers needed. CI must skip vault-dependent roles — use `--skip-tags ssh,redhat,containers` or stub secrets via GitHub Actions secrets. Ansible must be pip-installed (not pre-installed on runners).
+- **RHEL/CSB**: CentOS Stream 10 as proxy (upstream development branch for RHEL 10, released Dec 2024). Container image: `quay.io/centos/centos:stream10` (needs custom Dockerfile for systemd). No geerlingguy CentOS Stream 10 image — use `geerlingguy/docker-rockylinux10-ansible` as closest alternative. Community Vagrant box: `alvistack/centos-10-stream`. Free Red Hat Developer Subscription for actual RHEL testing (16 physical/virtual nodes, including production use).
 - **Full CI strategy**: containers on every PR (fast gate), VM on merge to main (thorough), macOS runner for macOS roles.
 
 **Smoke tests (`make smoke-test` / `scripts/smoke-test.sh`):**
 ```bash
 # Post-run verification — run after make all
-ssh -T git@github.com                    # SSH auth works
+timeout 10 ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"  # SSH auth (needs YubiKey touch)
 oc version --client                       # oc installed
 podman info                               # Podman works
 gh auth status                            # GitHub CLI auth
 ykman info                                # YubiKey detected
 tailscale status                          # Tailscale connected
 claude --version                          # Claude Code installed
-resolvectl status | grep -q DNSOverTLS    # DNS over TLS active
+resolvectl status | grep -qi "DNS.*Over.*TLS.*yes"  # DNS over TLS active
 sysctl kernel.yama.ptrace_scope           # ptrace hardened
 getenforce                                # SELinux enforcing
+cat /sys/kernel/security/lockdown         # Should show [integrity]
+firewall-cmd --get-default-zone           # Should be "drop"
+git config --global --get-all safe.directory  # Should be empty (no /tmp or *)
 ss -tlnp | grep -v "127.0.0.1\|::1"      # No unexpected listeners
 ```
 
