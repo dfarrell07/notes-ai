@@ -336,13 +336,13 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **CA certs**: 2022-IT-Root-CA.pem, Eng-CA.crt → `/etc/pki/ca-trust/source/anchors/` (work profile)
 - **auditd rules**: monitor reads of `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.kube/config`, `~/.vault_pass`, `~/.claude/.credentials.json`. Deploy to `/etc/audit/rules.d/claude-code.rules`.
 - **BIOS hardening** (ThinkPad): set Supervisor Password, disable USB/PXE boot, set Thunderbolt security to "Secure Connect" (`boltctl` manages runtime authorization), disable Intel AMT if unused. Without BIOS password, physical access bypasses Secure Boot.
-- **USBGuard**: deploy on Fedora (not just CSB). Whitelist YubiKey (`1050:0407`) and Moonlander (`3297:1969`), block all other USB devices by default. `usbguard generate-policy` for initial setup.
-- **Kernel**: blacklist intel_vbtn. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=1` (disable io_uring for unprivileged users; value 2 disables for ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
+- **USBGuard**: deploy on Fedora (not just CSB). Whitelist YubiKey (`1050:0407` — OTP+U2F+CCID default mode), Moonlander (`3297:1969`), and Moonlander DFU bootloader (`0483:df11` — needed for firmware flashing). Block all other USB devices by default. `usbguard generate-policy` for initial setup.
+- **Kernel**: blacklist intel_vbtn if non-convertible ThinkPad has false tablet-mode bug (keyboard/touchpad disabled at boot). Kernel 6.19 has improved DMI filtering — may not be needed. Test before adding. Sysctl hardening: `kernel.yama.ptrace_scope=1` (prevent cross-process memory reading), `kernel.kptr_restrict=1` (hide kernel pointers from /proc/kallsyms), `kernel.io_uring_disabled=1` (disable io_uring for unprivileged users; value 2 disables for ALL including root), `net.ipv4.conf.all.send_redirects=0`, `net.ipv4.conf.all.rp_filter=1` (strict reverse-path filtering). Enable Secure Boot in BIOS.
 - **IPv6**: either disable (`sysctl net.ipv6.conf.all.disable_ipv6=1`) or mirror all IPv4 firewall rules for IPv6. IPv6 traffic can bypass VPN tunnels and firewall rules if only IPv4 is configured.
 - **Network hardening**: disable LLMNR (`LLMNR=no` in resolved.conf), disable Avahi on untrusted networks, WiFi MAC randomization in NetworkManager. Enable DNS over TLS: `DNSOverTLS=yes` and `DNS=1.1.1.1#cloudflare-dns.com` in resolved.conf (covers all system-level DNS, not just Chrome).
 - **Kernel lockdown**: `lockdown=integrity` kernel parameter (prevents unsigned module loading, /dev/mem writes). Requires Secure Boot enabled first.
 - **Core dumps disabled**: `ulimit -c 0` in shell profile, `kernel.core_pattern=|/bin/false` in sysctl, `ProcessSizeMax=0` in coredump.conf. Prevents secrets from leaking to dump files.
-- **Encrypted swap**: use zram (no disk backing) or dm-crypt swap with random key at boot. `shred` is unreliable on btrfs/SSDs — prefer process substitution over writing secrets to disk.
+- **Encrypted swap**: Fedora 42 uses zram-only by default (no disk-backed swap). Verify with `swapon --show` — should show only `/dev/zram0`. If disk swap exists (custom partitioning), use dm-crypt with random key at boot via `/etc/crypttab`. `shred` is unreliable on btrfs/SSDs — prefer process substitution over writing secrets to disk.
 - **umask 077**: set in zshrc — new files owner-only by default. Also `chmod 700 ~/.claude` (parent dirs are 755 by default, exposing directory listing of 444MB+ of session transcripts). Set `cleanupPeriodDays` in Claude Code settings for explicit transcript retention.
 - **PATH ordering**: ensure `/usr/bin` before `~/.local/bin` AND `/home/linuxbrew/.linuxbrew/bin` — both are user-writable and can shadow system binaries via supply chain attacks (pip/npm/brew can drop trojans named `git`, `ssh`, `sudo`).
 - **fwupd**: `fwupdmgr get-updates && fwupdmgr update` in system role. UEFI/Thunderbolt/NVMe firmware updates.
@@ -351,7 +351,7 @@ Firewall, SSH hardening, and Tailscale config in the Security section. Remaining
 - **X11 → Sway migration** (future, 2026 is the right window): X11 allows any app to keylog any other. Sway (Wayland i3) isolates app input. i3 cannot run under XWayland — requires full Xorg session. Fedora is removing X11 sessions (GNOME X11 already dropped). Sway config reuses ~95% of i3 config (change `xrandr` → `sway output`, `feh` → `output bg`, `scrot` → `grim`+`slurp`). Claude Code sandbox works fine on Wayland. Start with dual i3+Sway setup.
 - **Lid close**: `HandleLidSwitch=lock`, `HandleLidSwitchExternalPower=lock` in `/etc/systemd/logind.conf` — locks screen on lid close (no suspend, screen locks)
 - **dnf-automatic**: `dnf5 install dnf5-plugin-automatic`, enable `dnf5-automatic.timer`. Config at `/etc/dnf/automatic.conf`: `apply_updates=yes`, `upgrade_type=default` in `[commands]` section. Exclude third-party repos from auto-updates by setting `enabled=0` in their `.repo` files (gh-cli, google-chrome, acli — compromised repo key = auto-installed trojan). Update manually with `dnf5 upgrade --enablerepo=<name>`.
-- **Services**: fail2ban, libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). Disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain — GTK, Qt, Chromium, and all Electron apps depend on it. If cupsd is kept, verify it listens only on localhost.
+- **Services**: fail2ban (only if SSH is publicly exposed — unnecessary behind Tailscale with key-only FIDO2 auth), libvirtd, dkms, mullvad/protonvpn (gated). Docker disabled by default (start on demand). Disable and remove `cups-browsed` (entry point for September 2024 RCE chain: CVE-2024-47176/47076/47175/47177). Remove `cups` daemon if not printing. `libcups` must remain — GTK, Qt, Chromium, and all Electron apps depend on it. If cupsd is kept, verify it listens only on localhost.
 - **Virtualization**: libvirt, qemu-kvm
 
 ### User Environment (become: false)
@@ -445,7 +445,7 @@ Two separate instances to prevent auth/data leakage between work (Vertex AI) and
 - **Docker group**: never join. Docker group membership = passwordless root (can mount host filesystem, read `/etc/shadow`). Docker daemon disabled by default, started on demand only.
 - **Podman preferred**: rootless, daemonless, fork-exec model. 11 kernel capabilities vs Docker's 14.
 - **Docker rootless mode**: if Docker specifically needed, run rootless. No group membership required.
-- **Registry auth**: credential helper (`docker-credential-secretservice` on Linux, keychain on Mac), not base64 in config files. Deployed to `~/.config/containers/auth.json` (persistent, survives reboot) with mode 0600. Set `REGISTRY_AUTH_FILE` env var.
+- **Registry auth**: on Linux, use `podman login --authfile ~/.config/containers/auth.json` with `chmod 0600` (simpler than credential helpers — `docker-credential-secretservice` is not in Fedora repos, requires gnome-keyring/D-Bus on i3, and `podman login` doesn't write through helpers). On macOS, use `docker-credential-osxkeychain` via Homebrew with `credHelpers` in auth.json. Set `REGISTRY_AUTH_FILE` env var.
 
 ### Cloud CLI Credentials
 
@@ -566,7 +566,7 @@ Mitigations:
 - Sudo password from vault, not hardcoded. Set `become_exe: /usr/bin/sudo` in ansible.cfg (Ansible searches PATH for sudo — a trojan `~/.local/bin/sudo` could intercept the become password).
 - All module names use FQCN (`ansible.builtin.copy`, not `copy`).
 - All `shell:`/`command:` tasks have `changed_when:` and idempotency guards (`creates:`, `when:`).
-- `requirements.yml` pins all external collection versions with explicit `source` URLs (Galaxy has no namespace protection against typosquatting — anyone can register `communitty.general`). Run `ansible-galaxy collection verify` after install. Consider `--keyring` GPG verification.
+- `requirements.yml` pins all external collection versions. Galaxy has limited namespace protection (manual review for custom namespaces, but auto-created namespaces matching GitHub usernames are not vetted for typosquatting). `source` in requirements.yml pins the server, not the collection identity — version pinning is the real defense. Run `ansible-galaxy collection verify` after install (checks file integrity against published manifest). `--keyring` GPG verification available but only on private Automation Hub, not public Galaxy.
 - **Ansible repo integrity**: commit signing enforced via branch protection. Consider `ansible-sign` for GPG project-level verification before `make all` runs on a fresh machine.
 - **Audit logging**: Claude Code logs full JSONL transcripts to `~/.claude/projects/`. Enable OpenTelemetry for structured monitoring: `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_LOGS_EXPORTER=console`, `OTEL_LOG_TOOL_DETAILS=1`. Add auditd rules for sensitive file reads (`~/.ssh/`, `~/.aws/`, `~/.kube/`, `~/.vault_pass`).
 
@@ -600,7 +600,7 @@ Items that only apply to macOS (personal Mac desktop):
 
 ### Chrome Hardening
 
-Deploy via Ansible as policy JSON — works without enterprise enrollment on Linux (`/etc/opt/chrome/policies/managed/`) and macOS (`/Library/Managed Preferences/`).
+Deploy via Ansible — works without enterprise enrollment. Linux: JSON in `/etc/opt/chrome/policies/managed/`. macOS: plist at `/Library/Managed Preferences/com.google.Chrome.plist` (plist format, not JSON).
 
 - **Extension allowlist**: block all extensions by default (`ExtensionInstallBlocklist: ["*"]`), allowlist by Chrome Web Store ID (uBlock Origin, Bitwarden, etc.)
 - **Disable built-in password manager**: `PasswordManagerEnabled: false`, `AutofillCreditCardEnabled: false`, `AutofillAddressEnabled: false` — use Bitwarden instead
@@ -667,7 +667,7 @@ See `laptop-setup/2026-05-28-distrobox-dev-environment.md` for full design.
 
 - **Primary role**: portable thin client for steering Claude Code remotely + Claude app for voice/connectors
 - **Remote Control**: `claude.ai/code` in Safari → steer Mac desktop sessions. Pro plan, full features.
-- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. YubiKey USB-C works for SSH auth.
+- **SSH**: Blink Shell + Tailscale → mosh/tmux to work laptop. **YubiKey limitation**: Blink Shell supports ecdsa-sk but NOT ed25519-sk keys. Generate a separate ecdsa-sk key for iPad SSH auth, or use Termius ($10/mo, supports both key types).
 - **Claude app**: work account (managed, Jira/GitHub connectors) + personal account (full connectors, voice mode)
 - **GitHub app**: issue creation, PR review (same as phone but better with keyboard + larger screen)
 - **Dispatch**: send tasks from Claude iOS app to Mac Desktop app
